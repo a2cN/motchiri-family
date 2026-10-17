@@ -6,6 +6,8 @@ export const metadata: Metadata = {
     default: "もっちりファミリー",
     template: "%s | もっちりファミリー",
   },
+  // ホーム画面から枠なしで起動する(iOS)。statusBarStyle は既定の 'default'(正典: 状態バーの見た目は次の UI/UX 設計タスク)。
+  appleWebApp: { capable: true, title: "もっちりファミリー" },
 };
 
 export const viewport: Viewport = {

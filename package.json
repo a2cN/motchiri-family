@@ -6,7 +6,12 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint . --max-warnings=0 && stylelint \"src/**/*.css\"",
+    "typecheck": "next typegen && tsc --noEmit",
+    "test": "vitest run",
+    "e2e": "next build && playwright test",
+    "e2e:install": "PLAYWRIGHT_BROWSERS_PATH=\"$PWD/.playwright-browsers\" playwright install webkit",
+    "secrets:scan": "gitleaks dir --redact --config .gitleaks.toml ."
   },
   "dependencies": {
     "next": "16.4.2",
@@ -16,13 +21,16 @@
   "devDependencies": {
     "@playwright/test": "^1.64.1",
     "@tailwindcss/turbopack": "^4",
-    "@types/node": "^20",
+    "@types/node": "^24.19.2",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.4.2",
+    "eslint-plugin-better-tailwindcss": "^4.9.1",
+    "stylelint": "^17.16.0",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^5.0.5"
   },
   "engines": {
     "node": ">=24 <25"

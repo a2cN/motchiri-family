@@ -44,3 +44,6 @@ next-env.d.ts
 /test-results/
 /playwright-report/
 /e2e-artifacts/
+
+# playwright のブラウザ本体(npm run e2e:install)
+/.playwright-browsers/

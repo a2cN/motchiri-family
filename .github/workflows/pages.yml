@@ -1,6 +1,6 @@
 # 静的書き出しを GitHub Pages に公開する。
 # このワークフローは秘密(シークレット)を1つも使わない。
-# 足場のモック用の最小版: lint・typecheck・test は、品質ゲートの scripts が整う段階(ステージ 50)で足す。
+# CI で回すゲート: 秘密の検査、lint、typecheck、test、build。E2E は回さない(30_architecture.md D-16。ローカルで npm run e2e)。
 name: pages
 
 on:
@@ -45,6 +45,9 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
       - run: npm run build
       - uses: actions/upload-pages-artifact@v5
         with:
