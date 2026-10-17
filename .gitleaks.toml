@@ -1,0 +1,17 @@
+# gitleaks の設定。既定の規則 + 生成物のパスの除外。
+# 規則の除外(gitleaks:allow、.gitleaksignore)は使わない。
+title = "motchiri-family"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "生成物と依存(リポジトリに入れないもの)"
+paths = [
+  '''(^|/)node_modules/''',
+  '''(^|/)\.next/''',
+  '''(^|/)out/''',
+  '''(^|/)test-results/''',
+  '''(^|/)playwright-report/''',
+  '''(^|/)e2e-artifacts/''',
+]

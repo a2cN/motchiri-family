@@ -1,0 +1,27 @@
+@import "tailwindcss";
+@import "../styles/tokens.css";
+
+/* ライトモードのみ(ADR 0005 決定 2)。iOS が入力欄などを暗くしないようにする。 */
+:root {
+  color-scheme: light;
+}
+
+@layer base {
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-size: 1rem;
+    line-height: 1.6;
+  }
+
+  /* フォーカスの輪(ring、2px、外側に 2px)。消さない。 */
+  a:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+}
+
+/* 本文の領域の下の余白: 24px + ホームバーの安全領域 */
+@utility pb-safe {
+  padding-bottom: calc(1.5rem + env(safe-area-inset-bottom));
+}

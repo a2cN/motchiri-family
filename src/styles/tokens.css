@@ -1,0 +1,69 @@
+/*
+ * デザイントークン。色の値を書いてよいのは、このファイルだけ(ADR 0005 決定 1、要件 UI-02)。
+ * 値は「仮」: 40_design_brief.md の「仮のトークン」(あんずとクリーム)。承認前のモック。
+ * ダーク用の値は置かない(ADR 0005 決定 2、30_architecture.md D-19)。
+ */
+
+:root {
+  --background: #fff8f0;
+  --foreground: #4a3428;
+  --card: #fffcf8;
+  --card-foreground: #4a3428;
+  --popover: #fffcf8;
+  --popover-foreground: #4a3428;
+  --primary: #f6b98a;
+  --primary-foreground: #4a3428;
+  --secondary: #fde8d7;
+  --secondary-foreground: #4a3428;
+  --muted: #f7ede4;
+  --muted-foreground: #7a5e4e;
+  --accent: #fcdcc4;
+  --accent-foreground: #4a3428;
+  --destructive: #b42318;
+  --border: #ead9cb;
+  --input: #ead9cb;
+  --ring: #b8682f;
+  --radius: 1rem;
+  --shadow-card: 0 2px 8px rgb(74 52 40 / 0.08);
+}
+
+/* Tailwind の既定の色・角の丸み・影を消し、上の変数にだけ対応づける。
+   こうすると bg-red-500 や bg-white は存在しないクラスになる(D-12)。 */
+@theme inline {
+  --color-*: initial;
+  --radius-*: initial;
+  --shadow-*: initial;
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --shadow-card: var(--shadow-card);
+}
+
+/* 文字(仮): 端末の文字。Web フォントは使わない(40_design_brief.md 決定 2)。 */
+@theme {
+  --font-sans:
+    system-ui, -apple-system, "Hiragino Sans", "Hiragino Kaku Gothic ProN",
+    "Noto Sans JP", "Noto Sans CJK JP", sans-serif;
+}

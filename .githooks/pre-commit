@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# gitleaks: ステージ済みの変更にシークレットが含まれていたらコミットを止める。
+# 有効化: git config core.hooksPath .githooks(clone 後に1回)
+if ! command -v gitleaks >/dev/null 2>&1; then
+  echo "gitleaks が見つかりません。インストールしてください(フェイルオープンを避けるためコミットを止めます)" >&2
+  exit 1
+fi
+exec gitleaks git --pre-commit --staged --redact --verbose --config .gitleaks.toml
