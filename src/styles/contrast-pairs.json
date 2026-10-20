@@ -1,0 +1,16 @@
+{
+  "pairs": [
+    { "fg": "foreground", "bg": "muted", "min": 4.5, "use": "空の状態の見出し" },
+    { "fg": "muted-foreground", "bg": "background", "min": 4.5, "use": "画面の地の上の補足の文字" },
+    { "fg": "muted-foreground", "bg": "card", "min": 4.5, "use": "カードの中の補足の文字、チェック済みの行" },
+    { "fg": "destructive", "bg": "background", "min": 4.5, "use": "入力の誤りの文字" },
+    { "fg": "destructive", "bg": "card", "min": 4.5, "use": "入力の誤りの文字(カードの中)" },
+    { "fg": "input", "bg": "background", "min": 3, "use": "非テキスト: 入力欄・チェック・チップの枠(部品の境界)" },
+    { "fg": "input", "bg": "card", "min": 3, "use": "非テキスト: 入力欄・チェック・チップの枠(カードの中)" },
+    { "fg": "ring", "bg": "background", "min": 3, "use": "非テキスト: フォーカスの輪" },
+    { "fg": "ring", "bg": "card", "min": 3, "use": "非テキスト: フォーカスの輪(カードの中)" },
+    { "fg": "ok-foreground", "bg": "card", "min": 3, "use": "非テキスト: 残量 ○ のボタンの枠" },
+    { "fg": "warn-foreground", "bg": "card", "min": 3, "use": "非テキスト: 残量 △ のボタンの枠" },
+    { "fg": "alert-foreground", "bg": "card", "min": 3, "use": "非テキスト: 残量 × のボタンの枠" }
+  ]
+}

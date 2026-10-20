@@ -33,4 +33,58 @@ test.describe("検査の自己テスト", () => {
     const small = await findSmallTapTargets(page);
     expect(small.map((x) => x.text)).toEqual(["a"]);
   });
+
+  // ---- 30_architecture.md D-15: 部品(checkbox、role 付き、隠れた要素)に合わせた広げ方 ----
+
+  test("20px の button[role=checkbox] を検出する", async ({ page }) => {
+    await page.setContent('<button role="checkbox" aria-label="x" style="display:block;width:20px;height:20px"></button>');
+    const small = await findSmallTapTargets(page);
+    expect(small).toHaveLength(1);
+  });
+
+  test("同じ 20px のものを、48px の label で包むと検出しない", async ({ page }) => {
+    await page.setContent(
+      '<label style="display:flex;align-items:center;height:48px;width:200px"><button role="checkbox" aria-label="x" style="display:block;width:20px;height:20px"></button>牛乳</label>',
+    );
+    expect(await findSmallTapTargets(page)).toEqual([]);
+  });
+
+  test("label が 44px 未満なら、中の checkbox が大きくても検出する", async ({ page }) => {
+    await page.setContent(
+      '<label style="display:flex;align-items:center;height:30px;width:200px"><input type="checkbox" style="width:20px;height:20px;margin:0">牛乳</label>',
+    );
+    const small = await findSmallTapTargets(page);
+    expect(small).toHaveLength(1);
+    expect(small[0].height).toBeCloseTo(30, 1);
+  });
+
+  test("素の input[type=checkbox] と [role=button] と summary の 20px を検出する", async ({ page }) => {
+    await page.setContent(
+      '<input type="checkbox" style="display:block;width:20px;height:20px;margin:0"><div role="button" style="width:20px;height:20px"></div><details><summary style="display:block;height:20px">s</summary></details>',
+    );
+    expect(await findSmallTapTargets(page)).toHaveLength(3);
+  });
+
+  test("aria-hidden の中の小さな input・button は、押せる範囲も 16px も検出しない", async ({ page }) => {
+    await page.setContent(
+      '<span aria-hidden="true"><input type="checkbox" style="width:1px;height:1px;font-size:10px"><button style="width:1px;height:1px"></button></span>',
+    );
+    expect(await findSmallTapTargets(page)).toEqual([]);
+    expect(await findSmallInputs(page)).toEqual([]);
+  });
+
+  test("描かれていない(display:none)・visibility:hidden の小さな要素は検出しない", async ({ page }) => {
+    await page.setContent(
+      '<button style="display:none;width:10px;height:10px"></button><button style="visibility:hidden;width:10px;height:10px"></button><input style="display:none;font-size:10px"><input style="visibility:hidden;font-size:10px">',
+    );
+    expect(await findSmallTapTargets(page)).toEqual([]);
+    expect(await findSmallInputs(page)).toEqual([]);
+  });
+
+  test("44×44px ちょうどの role 付きの要素は検出しない(対照)", async ({ page }) => {
+    await page.setContent(
+      '<div role="tab" style="width:44px;height:44px"></div><div role="option" style="width:44px;height:44px"></div><div role="switch" style="width:44px;height:44px"></div>',
+    );
+    expect(await findSmallTapTargets(page)).toEqual([]);
+  });
 });

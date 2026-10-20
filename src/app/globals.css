@@ -1,5 +1,8 @@
 @import "tailwindcss";
 @import "../styles/tokens.css";
+/* shadcn/ui の初期化(Base UI)が足した2行。色や .dark は足さない(tokens.css が唯一の置き場所) */
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
 
 /* ライトモードのみ(ADR 0005 決定 2)。iOS が入力欄などを暗くしないようにする。 */
 :root {

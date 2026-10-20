@@ -157,6 +157,32 @@ describe("色などの直書きの禁止(D-12、D-19)", () => {
     expect(ruleIds(m)).toContain("better-tailwindcss/no-restricted-classes");
   });
 
+  // shadcn/ui を入れたので、cn() の中のクラスも見ていることを確かめる(30_architecture.md §6、ADR 0006 決定 20 の宿題)
+  it("G10: cn() の中の任意値の色(shadcn の部品の置き場所 src/components/ui/)", async () => {
+    const m = await errors(
+      `import { cn } from "cn";\nexport const X = ({ className }: { className?: string }) => <div className={cn("p-4", "bg-[#ffcc99]", className)} />;\n`,
+      "src/components/ui/x.tsx",
+    );
+    expect(ruleIds(m)).toContain("better-tailwindcss/no-restricted-classes");
+  });
+
+  it("G10b: cn() の中の dark: と既定の色", async () => {
+    const m = await errors(
+      `import { cn } from "cn";\nexport const X = () => <div className={cn("dark:bg-background", "bg-red-500")} />;\n`,
+      "src/components/ui/x.tsx",
+    );
+    expect(ruleIds(m)).toContain("better-tailwindcss/no-restricted-classes");
+    expect(ruleIds(m)).toContain("better-tailwindcss/no-unknown-classes");
+  });
+
+  it("G10c: cva() の中の任意値の色", async () => {
+    const m = await errors(
+      `import { cva } from "class-variance-authority";\nexport const v = cva("p-4", { variants: { a: { x: "text-[#123456]" } } });\n`,
+      "src/components/ui/x.tsx",
+    );
+    expect(ruleIds(m)).toContain("better-tailwindcss/no-restricted-classes");
+  });
+
   it("G13: トークンのクラスは通る", async () => {
     const m = await errors(
       `export const X = () => <div className="bg-background text-foreground bg-primary text-primary-foreground rounded-lg shadow-card p-5 pb-safe" />;\n`,

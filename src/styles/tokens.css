@@ -2,6 +2,10 @@
  * デザイントークン。色の値を書いてよいのは、このファイルだけ(ADR 0005 決定 1、要件 UI-02)。
  * 値は「仮」: 40_design_brief.md の「仮のトークン」(あんずとクリーム)。承認前のモック。
  * ダーク用の値は置かない(ADR 0005 決定 2、30_architecture.md D-19)。
+ *
+ * stock-uiux のモック 1巡目: 下の [data-direction="<id>"] の範囲は、見た目の方向性(あんず・さくらもち・たまご)
+ * を見比べるための仮の値(40_design_brief.md rev1)。:root の値は変えていない(本番の3画面は足場の見た目のまま)。
+ * 範囲はモックと一緒に消える(30_architecture.md §8)。
  */
 
 :root {
@@ -52,13 +56,29 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  /* 状態の色の組(40_design_brief.md 決定 4)。値は [data-direction] の範囲にだけある(1巡目) */
+  --color-ok: var(--ok);
+  --color-ok-foreground: var(--ok-foreground);
+  --color-warn: var(--warn);
+  --color-warn-foreground: var(--warn-foreground);
+  --color-alert: var(--alert);
+  --color-alert-foreground: var(--alert-foreground);
+  --color-inverse: var(--inverse);
+  --color-inverse-foreground: var(--inverse-foreground);
 
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+  --radius-control: var(--control-radius);
+  --radius-check: var(--check-radius);
 
   --shadow-card: var(--shadow-card);
+  --shadow-bar: var(--shadow-bar);
+
+  /* 太さ: font-strong(品物名・ボタンの文字)、font-heading(見出し) */
+  --font-weight-strong: var(--weight-strong);
+  --font-weight-heading: var(--weight-heading);
 }
 
 /* 文字(仮): 端末の文字。Web フォントは使わない(40_design_brief.md 決定 2)。 */
@@ -66,4 +86,133 @@
   --font-sans:
     system-ui, -apple-system, "Hiragino Sans", "Hiragino Kaku Gothic ProN",
     "Noto Sans JP", "Noto Sans CJK JP", sans-serif;
+}
+
+/* カードの枠線(太さは方向性ごと。色は border)。border-[…] の任意値を避けるための utility。 */
+@utility card-border {
+  border-style: solid;
+  border-color: var(--border);
+  border-width: var(--card-border-width);
+}
+
+/* ---- ここから: モック 1巡目の方向性の範囲(40_design_brief.md rev1「トークンの値」) ---- */
+
+/* 案 A「あんず」: 落ち着いた、毎日の道具。端末の文字 */
+[data-direction="anzu"] {
+  --background: #FFF8F0;
+  --foreground: #4A3428;
+  --card: #FFFCF8;
+  --card-foreground: var(--foreground);
+  --popover: var(--card);
+  --popover-foreground: var(--foreground);
+  --primary: #F6B98A;
+  --primary-foreground: var(--foreground);
+  --secondary: #FDE8D7;
+  --secondary-foreground: var(--foreground);
+  --muted: #F7EDE4;
+  --muted-foreground: #7A5E4E;
+  --accent: #FCDCC4;
+  --accent-foreground: var(--foreground);
+  --destructive: #B42318;
+  --border: #EAD9CB;
+  --input: #9C7B66;
+  --ring: #B8682F;
+  --ok: #D8EBC8;
+  --ok-foreground: #2F4A22;
+  --warn: #FBE3A6;
+  --warn-foreground: #6A4A0E;
+  --alert: #F8D0C8;
+  --alert-foreground: #8B2A1C;
+  --inverse: var(--foreground);
+  --inverse-foreground: var(--background);
+  --radius: 1rem;
+  --control-radius: 0.75rem;
+  --check-radius: 0.5rem;
+  --shadow-card: 0 2px 8px rgb(74 52 40 / 0.08);
+  --shadow-bar: 0 -2px 8px rgb(74 52 40 / 0.08);
+  --card-border-width: 0px;
+  --weight-strong: 700;
+  --weight-heading: 700;
+}
+
+/* 案 B「さくらもち」: ふんわり、やさしい。Zen Maru Gothic。影なし */
+[data-direction="sakura"] {
+  --background: #FFF6F5;
+  --foreground: #5A3440;
+  --card: #FFFFFF;
+  --card-foreground: var(--foreground);
+  --popover: var(--card);
+  --popover-foreground: var(--foreground);
+  --primary: #F4B6C2;
+  --primary-foreground: var(--foreground);
+  --secondary: #FDE3E7;
+  --secondary-foreground: var(--foreground);
+  --muted: #FBEAEA;
+  --muted-foreground: #865868;
+  --accent: #F9D2DA;
+  --accent-foreground: var(--foreground);
+  --destructive: #B0283C;
+  --border: #F0D8DC;
+  --input: #9A6E7E;
+  --ring: #B4567A;
+  --ok: #DCEFD8;
+  --ok-foreground: #2E4A2A;
+  --warn: #FCE6B0;
+  --warn-foreground: #6A4A0E;
+  --alert: #F8C9C0;
+  --alert-foreground: #8B2A1C;
+  --inverse: var(--foreground);
+  --inverse-foreground: var(--background);
+  --radius: 1.5rem;
+  --control-radius: 9999px;
+  --check-radius: 9999px;
+  --shadow-card: none;
+  --shadow-bar: none;
+  --card-border-width: 1px;
+  --weight-strong: 500;
+  --weight-heading: 700;
+  --font-sans:
+    var(--font-zen-maru-gothic), system-ui, -apple-system, "Hiragino Sans",
+    "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Noto Sans CJK JP", sans-serif;
+}
+
+/* 案 C「たまご」: 明るく、元気。M PLUS Rounded 1c。2段のくっきりした影 */
+[data-direction="tamago"] {
+  --background: #FFFBEF;
+  --foreground: #4D3B1F;
+  --card: #FFFFFF;
+  --card-foreground: var(--foreground);
+  --popover: var(--card);
+  --popover-foreground: var(--foreground);
+  --primary: #F9D77E;
+  --primary-foreground: var(--foreground);
+  --secondary: #FDF0C8;
+  --secondary-foreground: var(--foreground);
+  --muted: #F8F0D8;
+  --muted-foreground: #75603A;
+  --accent: #FBE3A0;
+  --accent-foreground: var(--foreground);
+  --destructive: #A8321E;
+  --border: #EDE2C2;
+  --input: #8F784A;
+  --ring: #A8741A;
+  --ok: #DCEDC4;
+  --ok-foreground: #2F4A1C;
+  --warn: #FCD9B6;
+  --warn-foreground: #6E3E0E;
+  --alert: #F7CCC4;
+  --alert-foreground: #8B2A1C;
+  --inverse: var(--foreground);
+  --inverse-foreground: var(--background);
+  --radius: 0.625rem;
+  --control-radius: 0.5rem;
+  --check-radius: 0.375rem;
+  --shadow-card: 0 1px 2px rgb(77 59 31 / 0.10), 0 4px 12px rgb(77 59 31 / 0.10);
+  --shadow-bar: 0 -4px 12px rgb(77 59 31 / 0.10);
+  --card-border-width: 0px;
+  --weight-strong: 700;
+  --weight-heading: 800;
+  --font-sans:
+    var(--font-mplus-rounded-1c), system-ui, -apple-system, "Hiragino Sans",
+    "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Noto Sans CJK JP", sans-serif;
 }
