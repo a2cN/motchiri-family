@@ -61,3 +61,27 @@ export async function findSmallTapTargets(page: Page) {
       .filter((x) => x.width < 44 || x.height < 44);
   });
 }
+
+/**
+ * 下に固定した帯・タブの裏に、本文の最後の要素が隠れていないか(40_design_brief.md rev2「rev1 のスクリーンショットから直すこと」)。
+ * 一番下までスクロールして、`main` の中の最後の要素の下端が、固定した帯(`[data-bottom-stack]`)の上端より上にあることを確かめる。
+ * 隠れていれば、その位置を返す。固定・絶対位置の要素(読み上げ用の隠れた文字など)と、描かれていない要素は測らない。
+ */
+export async function findBottomOverlap(page: Page) {
+  return page.evaluate(() => {
+    window.scrollTo(0, document.documentElement.scrollHeight);
+    const stack = document.querySelector("[data-bottom-stack]");
+    const stackRect = stack ? stack.getBoundingClientRect() : null;
+    const stackTop = stackRect && stackRect.height > 0 ? stackRect.top : window.innerHeight;
+    const main = document.querySelector("main");
+    if (!main) return null;
+    let maxBottom = 0;
+    for (const el of Array.from(main.querySelectorAll("*"))) {
+      const style = getComputedStyle(el);
+      if (el.getClientRects().length === 0 || style.visibility === "hidden") continue;
+      if (style.position === "absolute" || style.position === "fixed") continue;
+      maxBottom = Math.max(maxBottom, el.getBoundingClientRect().bottom);
+    }
+    return maxBottom > stackTop + 0.5 ? { maxBottom, stackTop } : null;
+  });
+}

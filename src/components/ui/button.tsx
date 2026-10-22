@@ -10,10 +10,10 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        // 主なボタン。C 案だけ影がある(40 の部品の表)
+        // 主なボタン
         // font-strong と font-normal を同じ文字列に入れない(cn が font-strong を文字の種類と見て、太さと食い違うため)
         default:
-          "bg-primary font-strong text-primary-foreground active:bg-accent in-data-[direction=tamago]:shadow-card",
+          "bg-primary font-strong text-primary-foreground active:bg-accent",
         // 控えめなボタン(+1/−1、在庫に登録)
         secondary: "bg-secondary font-strong text-secondary-foreground active:bg-accent",
         // 文字だけのボタン(外す、クリア)。面なし
@@ -30,8 +30,8 @@ const buttonVariants = cva(
         text: "h-11 min-w-11 px-3",
         // 記号だけ: 44×44px
         icon: "size-11 text-xl",
-        // 残量のボタン: 64×44px
-        level: "h-11 w-16 text-xl",
+        // 残量のボタン: 64×48px(40 rev2 の部品の直し。ほかのボタンの高さにそろえる)
+        level: "h-12 w-16 text-xl",
       },
     },
     defaultVariants: {

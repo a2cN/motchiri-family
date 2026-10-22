@@ -42,11 +42,26 @@ export function toInputValue(base: Date, offsetDays: number): string {
   return `${day.getFullYear()}-${m}-${d}`;
 }
 
-/** 期限の印。期限切れ = 0 日より前、期限間近 = 今日。
- *  モックのデータは −1・−2・0・+8 以上・なし だけなので、OD-stock-uiux-08 のどちらの答えでも同じ表示になる(決定 12)。 */
-export function expiryStatus(expiresInDays: number | null): "expired" | "soon" | "none" {
-  if (expiresInDays === null) return "none";
+/** 次の金曜までの日数(今日が金曜なら 7、ほかの日は今日を含む最も近い金曜まで)。OD-stock-uiux-08 B */
+export function daysUntilNextFriday(base: Date): number {
+  const dow = base.getDay();
+  const diff = (5 - dow + 7) % 7;
+  return diff === 0 ? 7 : diff;
+}
+
+/** 期限の印。期限切れ = 今日より前、期限間近 = 今日〜次の金曜(OD-stock-uiux-08 B)。 */
+export function expiryStatus(expiresInDays: number | null, today: Date | null): "expired" | "soon" | "none" {
+  if (expiresInDays === null || today === null) return "none";
   if (expiresInDays < 0) return "expired";
-  if (expiresInDays === 0) return "soon";
+  if (expiresInDays <= daysUntilNextFriday(today)) return "soon";
   return "none";
+}
+
+/** `<input type="date">` の値(YYYY-MM-DD)を「今日から何日後」にする。空・不正なら null */
+export function daysFromToday(base: Date, value: string): number | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!m) return null;
+  const target = Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  const today = Date.UTC(base.getFullYear(), base.getMonth(), base.getDate());
+  return Math.round((target - today) / 86_400_000);
 }

@@ -1,8 +1,12 @@
 import type { Metadata } from "next";
-import { M_PLUS_Rounded_1c, Zen_Maru_Gothic } from "next/font/google";
+import { Zen_Maru_Gothic } from "next/font/google";
+import { MockToaster } from "./_components/mock-toaster";
+import { MockProvider } from "./_state/mock-state";
 
-// モック全体の枠(30_architecture.md §3)。検索に出さない。Web フォント(案 B・C)はビルドのときに取り込む(D-16)。
-// フォントの変数は、方向性の範囲の --font-sans の先頭に置く(tokens.css)。モックと一緒に消える。
+// モック全体の枠(30_architecture.md §3)。検索に出さない。包む要素は data-direction="sakura"(人間が選んだ方向性、OD-stock-uiux-07)。
+// Web フォント(Zen Maru Gothic)はビルドのときに取り込む(D-16)。フォントの変数は tokens.css の sakura の範囲の --font-sans の先頭にある。
+// 状態の Provider はここに置く(レイアウトは画面の移動で作り直されないので、モックの中を移動しても状態が続く。D-10)。
+// モックと一緒に消える。
 export const metadata: Metadata = {
   title: { absolute: "モック" },
   robots: { index: false, follow: false },
@@ -15,17 +19,15 @@ const zenMaruGothic = Zen_Maru_Gothic({
   preload: false,
 });
 
-const mplusRounded = M_PLUS_Rounded_1c({
-  weight: ["400", "700", "800"],
-  variable: "--font-mplus-rounded-1c",
-  display: "swap",
-  preload: false,
-});
-
 export default function MockLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className={`${zenMaruGothic.variable} ${mplusRounded.variable} flex min-h-dvh flex-col`}>
-      {children}
+    <div
+      data-direction="sakura"
+      className={`${zenMaruGothic.variable} flex min-h-dvh flex-1 flex-col bg-background font-sans text-foreground`}
+    >
+      <MockProvider>{children}</MockProvider>
+      {/* 「元に戻す」の表示も data-direction の中に置く(さくらもちの色・角を読むため) */}
+      <MockToaster />
     </div>
   );
 }

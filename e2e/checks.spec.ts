@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { findHorizontalOverflow, findSmallInputs, findSmallTapTargets } from "./checks";
+import { findBottomOverlap, findHorizontalOverflow, findSmallInputs, findSmallTapTargets } from "./checks";
 
 // 検査そのものの自己テスト。入力欄が1つも無い今でも、検査が空振りしていないことを示す。
 test.describe("検査の自己テスト", () => {
@@ -86,5 +86,21 @@ test.describe("検査の自己テスト", () => {
       '<div role="tab" style="width:44px;height:44px"></div><div role="option" style="width:44px;height:44px"></div><div role="switch" style="width:44px;height:44px"></div>',
     );
     expect(await findSmallTapTargets(page)).toEqual([]);
+  });
+
+  // ---- 40_design_brief.md rev2: 固定した帯の裏に、本文の最後の要素が隠れないこと ----
+
+  test("固定した帯の裏に最後の要素が隠れていると検出する", async ({ page }) => {
+    await page.setContent(
+      '<main style="margin:0"><div style="height:2000px"></div><button style="display:block;height:48px">最後</button></main><div data-bottom-stack style="position:fixed;left:0;right:0;bottom:0;height:80px"></div>',
+    );
+    expect(await findBottomOverlap(page)).not.toBeNull();
+  });
+
+  test("本文の下の余白が帯より大きければ、検出しない", async ({ page }) => {
+    await page.setContent(
+      '<main style="margin:0;padding-bottom:104px"><div style="height:2000px"></div><button style="display:block;height:48px">最後</button></main><div data-bottom-stack style="position:fixed;left:0;right:0;bottom:0;height:80px"></div>',
+    );
+    expect(await findBottomOverlap(page)).toBeNull();
   });
 });

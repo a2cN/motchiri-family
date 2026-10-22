@@ -15,9 +15,9 @@ export function Card({
 }
 
 // 空の状態のカード: 面 muted、影なし、内側 24px
-export function EmptyCard({ title, children }: { title: string; children: React.ReactNode }) {
+export function EmptyCard({ title, children, className }: { title: string; children: React.ReactNode; className?: string }) {
   return (
-    <section className="rounded-lg bg-muted p-6">
+    <section className={cn("rounded-lg bg-muted p-6", className)}>
       <h2 className="text-lg font-heading text-foreground">{title}</h2>
       <p className="text-base text-muted-foreground">{children}</p>
     </section>

@@ -3,8 +3,8 @@
 import { Button } from "@/components/ui/button";
 import type { SupplyLevel } from "../_data/types";
 
-// 残量のボタン(40_design_brief.md の部品の表)。64×44px、面は残量の色、枠 2px はその -foreground、
-// 記号 ○ △ × を 20px で。1タップで ○→△→×→○。読み上げは aria-label で補う(決定 10)。
+// 残量のボタン(40_design_brief.md の部品の表、rev2 で 64×48)。面は残量の色、枠 2px はその -foreground、
+// 記号 ○ △ × を 20px で。1タップで ○→△→×→○。読み上げは aria-label で補う。
 const SYMBOL: Record<SupplyLevel, string> = { full: "○", low: "△", out: "×" };
 const NEXT_SYMBOL: Record<SupplyLevel, string> = { full: "△", low: "×", out: "○" };
 const VARIANT = { full: "ok", low: "warn", out: "alert" } as const;

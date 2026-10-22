@@ -1,12 +1,15 @@
 "use client";
 
-import { usePathname } from "next/navigation";
 import { Toaster } from "@/components/ui/sonner";
 
-// 画面の下の操作の帯(買い物リスト、品物の登録)がある画面では、帯の上 8px に出す(40 の部品の表)。
-// 帯の高さは 72px(余白 12px ×2 + 48px)。品物の登録の帯は 768px 未満だけなので、iPad では少し高く出る(仮)。
+// 「元に戻す」の表示は、一番上の帯の 8px 上に出す(40 rev2 の部品の表)。帯の高さは BottomStack が測って
+// --toast-bottom に入れる(帯が無い画面では 24px)。固定値は持たない。iPad では本文の領域の中央、最大の幅 480px。
 export function MockToaster() {
-  const pathname = usePathname();
-  const hasBar = /\/(shopping-list|item-new)\/$/.test(pathname);
-  return <Toaster offset={{ bottom: hasBar ? 84 : 24 }} mobileOffset={{ bottom: hasBar ? 84 : 16, left: 16, right: 16 }} />;
+  return (
+    <Toaster
+      offset={{ bottom: "var(--toast-bottom, 24px)" }}
+      mobileOffset={{ bottom: "var(--toast-bottom, 16px)", left: 16, right: 16 }}
+      style={{ "--width": "480px" } as React.CSSProperties}
+    />
+  );
 }
