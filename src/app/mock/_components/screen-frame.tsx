@@ -2,14 +2,14 @@
 
 import Link from "next/link";
 import { useLayoutEffect, useRef } from "react";
-import { Refrigerator, ShoppingBasket, SlidersHorizontal, SprayCan } from "lucide-react";
+import { Package, Refrigerator, ShoppingBasket, SlidersHorizontal, SprayCan } from "lucide-react";
 import { cn } from "cn";
 import { useMockDispatch } from "../_state/mock-state";
 
 // 画面の枠(40_design_brief.md rev2「Component Specs」の共通・下のタブ・左のサイドバー・下の操作の帯)。
 // 幅の区切り: 768px 未満 = スマホ、768〜1023px = iPad 縦(md)、1024px 以上 = iPad 横(lg)。
 
-export type Active = "stock" | "supply" | "shopping-list" | "masters" | null;
+export type Active = "stock" | "supply" | "shopping-list" | "items" | "masters" | null;
 
 const TABS = [
   { key: "stock", href: "/mock/stock/", label: "食材", Icon: Refrigerator },
@@ -54,6 +54,7 @@ function Sidebar({ active }: { active: Active }) {
     { key: "stock", href: "/mock/stock/", label: "食材", Icon: Refrigerator },
     { key: "supply", href: "/mock/supply/", label: "日用品", Icon: SprayCan },
     { key: "shopping-list", href: "/mock/shopping-list/", label: "買い物リスト", Icon: ShoppingBasket },
+    { key: "items", href: "/mock/items/", label: "品物", Icon: Package },
     { key: "masters", href: "/mock/masters/", label: "マスタ", Icon: SlidersHorizontal },
   ] as const;
   return (
@@ -73,7 +74,13 @@ function Sidebar({ active }: { active: Active }) {
                 <Link
                   href={href}
                   aria-current={current ? "page" : undefined}
-                  onClick={key === "masters" ? () => dispatch({ type: "nav/masters", from: "stock" }) : undefined}
+                  onClick={
+                    key === "masters"
+                      ? () => dispatch({ type: "nav/masters", from: "stock" })
+                      : key === "items"
+                        ? () => dispatch({ type: "nav/items", from: "stock" })
+                        : undefined
+                  }
                   className={cn(
                     "flex h-12 items-center gap-3 border-l-4 px-3 text-base no-underline",
                     current ? "border-foreground bg-primary font-strong text-primary-foreground" : "border-transparent text-foreground",
@@ -126,8 +133,8 @@ export type ScreenShellProps = {
   /** 上の階層の画面(下のタブと「‹ トップ」)か、サブ画面(「‹ もどる」)か */
   level: "top" | "sub";
   backHref?: string;
-  /** 食材・日用品の右上の「マスタ」(スマホと iPad 縦) */
-  mastersFrom?: "stock" | "supply";
+  /** 食材・日用品の右上の「品物」「マスタ」(スマホと iPad 縦)。開いた元(食材 / 日用品)を覚える */
+  headerFrom?: "stock" | "supply";
   /** 下の操作の帯。tabletToo = iPad でも出す(サブ画面) */
   bar?: React.ReactNode;
   barOnTablet?: boolean;
@@ -141,7 +148,7 @@ export function ScreenShell({
   active = null,
   level,
   backHref = "/mock/",
-  mastersFrom,
+  headerFrom,
   bar,
   barOnTablet = false,
   noSidebar = false,
@@ -164,14 +171,23 @@ export function ScreenShell({
               <span aria-hidden="true">‹ </span>もどる
             </Link>
           )}
-          {mastersFrom && (
-            <Link
-              href="/mock/masters/"
-              onClick={() => dispatch({ type: "nav/masters", from: mastersFrom })}
-              className="inline-flex min-h-11 min-w-11 items-center justify-center text-base text-foreground no-underline lg:hidden"
-            >
-              マスタ
-            </Link>
+          {headerFrom && (
+            <div className="flex items-center gap-2 lg:hidden">
+              <Link
+                href="/mock/items/"
+                onClick={() => dispatch({ type: "nav/items", from: headerFrom })}
+                className="inline-flex min-h-11 min-w-11 items-center justify-center text-base text-foreground no-underline"
+              >
+                品物
+              </Link>
+              <Link
+                href="/mock/masters/"
+                onClick={() => dispatch({ type: "nav/masters", from: headerFrom })}
+                className="inline-flex min-h-11 min-w-11 items-center justify-center text-base text-foreground no-underline"
+              >
+                マスタ
+              </Link>
+            </div>
           )}
         </div>
       </header>

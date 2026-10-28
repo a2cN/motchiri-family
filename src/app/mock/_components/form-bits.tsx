@@ -63,3 +63,13 @@ export function GroupField({
     </div>
   );
 }
+
+// fieldset と legend で包むグループ(管理のしかた・補充の目安・残量。40 rev3 Accessibility Notes)
+export function FieldsetField({ legend, children }: { legend: string; children: React.ReactNode }) {
+  return (
+    <fieldset className="mt-4 first:mt-0">
+      <legend className="mb-1 text-base font-strong">{legend}</legend>
+      {children}
+    </fieldset>
+  );
+}

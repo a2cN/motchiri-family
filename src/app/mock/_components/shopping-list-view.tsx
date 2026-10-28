@@ -15,24 +15,24 @@ import { Card, EmptyCard } from "./card";
 import { PageTitle, ScreenShell } from "./screen-frame";
 import { showUndo } from "./undo";
 
-// 買い物リスト(40_design_brief.md rev2「買い物リスト」)。
+// 買い物リスト(40_design_brief.md rev3「買い物リスト」)。発生元の印は いつもの / 減った / 切れた / 手入力(OD-stock-uiux-39)。
 
 const SOURCE_BADGE: Record<ShoppingSource, { label: string; variant: "secondary" | "warn" | "alert" | "muted" }> = {
   regular: { label: "いつもの", variant: "secondary" },
-  supply_low: { label: "残量△", variant: "warn" },
-  supply_out: { label: "残量×", variant: "alert" },
+  low: { label: "減った", variant: "warn" },
+  out: { label: "切れた", variant: "alert" },
   manual: { label: "手入力", variant: "muted" },
 };
 
 function Row({ entry }: { entry: ShoppingEntry }) {
-  const { list, settings } = useMockState();
+  const { list } = useMockState();
   const dispatch = useMockDispatch();
   const badge = SOURCE_BADGE[entry.source];
 
   const remove = () => {
     const index = list.findIndex((e) => e.id === entry.id);
     dispatch({ type: "list/remove", id: entry.id });
-    showUndo(`${entry.name}を外しました`, () => dispatch({ type: "list/restore", entry, index }), settings.undoSeconds);
+    showUndo(`${entry.name}を外しました`, () => dispatch({ type: "list/restore", entry, index }));
   };
 
   return (
@@ -166,13 +166,11 @@ function MemoCard() {
 }
 
 export function ShoppingListScreen() {
-  const { list, settings } = useMockState();
+  const { list } = useMockState();
   const [name, setName] = useState("");
 
-  const ordered =
-    settings.checkedOrder === "bottom"
-      ? [...list.filter((e) => !e.checked), ...list.filter((e) => e.checked).sort((a, b) => a.checkedSeq - b.checkedSeq)]
-      : list;
+  // チェック済みの行はその場に残す(OD-stock-uiux-17 A 確定)
+  const ordered = list;
   const checkedCount = list.filter((e) => e.checked).length;
 
   return (
