@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { contrastRatio, derivePairs, evaluate, formatRatio, parseTokenScopes } from "../../scripts/contrast.mjs";
 
@@ -167,5 +168,36 @@ describe("わざと AA 未満の組", () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+});
+
+// 実際の tokens.css に対するゲート(30_architecture.md §1「ゲート」1〜3、D-04・D-05)。
+describe("ゲート: 本番の tokens.css", () => {
+  const css = readFileSync(path.resolve(__dirname, "../../src/styles/tokens.css"), "utf8");
+  const list = JSON.parse(readFileSync(path.resolve(__dirname, "../../src/styles/contrast-pairs.json"), "utf8")) as {
+    pairs: { fg: string; bg: string; min: number; use: string }[];
+  };
+
+  it("1: 一覧の全組と自動の組が、root で pass", () => {
+    const names = Object.keys(parseTokenScopes(css).root);
+    const pairs = [...list.pairs];
+    const results = evaluate(css, pairs, { scopes: ["root"] });
+    expect(results.length).toBeGreaterThanOrEqual(list.pairs.length);
+    expect(derivePairs(names).length).toBeGreaterThan(0);
+    const bad = results.filter((r) => r.status !== "pass").map((r) => `${r.fg}/${r.bg}: ${r.status} ${r.ratio}`);
+    expect(bad).toEqual([]);
+  });
+
+  it("2: 一覧が空でなく、min は 4.5 か 3、use が空でない", () => {
+    expect(list.pairs.length).toBeGreaterThan(0);
+    for (const p of list.pairs) {
+      expect([4.5, 3]).toContain(p.min);
+      expect(p.use.trim()).not.toBe("");
+    }
+  });
+
+  it("3: [data-direction の範囲(モック用)が残っていない", () => {
+    expect(css).not.toContain("[data-direction");
+    expect(Object.keys(parseTokenScopes(css))).toEqual(["root"]);
   });
 });

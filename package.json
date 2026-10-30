@@ -12,7 +12,8 @@
     "e2e": "next build && playwright test",
     "e2e:install": "PLAYWRIGHT_BROWSERS_PATH=\"$PWD/.playwright-browsers\" playwright install webkit",
     "secrets:scan": "gitleaks dir --redact --config .gitleaks.toml .",
-    "contrast": "node scripts/contrast.mjs"
+    "contrast": "node scripts/contrast.mjs",
+    "pwa-images": "node scripts/pwa-images.mjs"
   },
   "dependencies": {
     "@base-ui/react": "1.9.0",

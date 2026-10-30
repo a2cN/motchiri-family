@@ -1,0 +1,14 @@
+<!doctype html>
+<!-- アイコンと起動時の画面の型紙。色は var(--…) だけ(値は src/styles/tokens.css から読み込む)。
+     scripts/pwa-images.mjs が、tokens.css の中身を #tokens に、パラメータを window.__params に入れて開く。 -->
+<meta charset="utf-8" />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@700&text=%E3%82%82%E3%81%A3%E3%81%A1%E3%82%8A%E3%83%95%E3%82%A1%E3%83%9F%E3%83%AB%E3%83%BC" />
+<style id="tokens"></style>
+<style>
+  html, body { margin: 0; padding: 0; }
+  body { font-family: "Zen Maru Gothic", sans-serif; font-weight: var(--weight-heading); color: var(--foreground); }
+  .icon { display: flex; align-items: center; justify-content: center; background: var(--primary); line-height: 1; }
+  .splash { display: flex; flex-direction: column; align-items: center; justify-content: center; background: var(--background); }
+  .label { margin-top: 24px; font-size: 20px; line-height: 1.2; }
+</style>
+<div id="root"></div>

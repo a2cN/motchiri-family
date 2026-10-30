@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { expect, test } from "@playwright/test";
 import { portalModules } from "../src/modules/registry";
+import { startupImages } from "../src/pwa/startup-images";
 import { findHorizontalOverflow, findSmallInputs, findSmallTapTargets } from "./checks";
 
 // 画面ごと・画面サイズごとの検査と、承認と完了の証拠になるスクリーンショット(30_architecture.md §7)。
@@ -78,4 +79,16 @@ test("PWA: manifest と apple-touch-icon が取得できる(basePath の付け�
   expect(apple.status()).toBe(200);
 
   await expect(page.locator('meta[name="apple-mobile-web-app-title"]')).toHaveAttribute("content", "もっちりファミリー");
+});
+
+test("PWA: 状態バーは default、起動時の画面の画像が一覧の数だけあり、すべて取得できる", async ({ page }) => {
+  await page.goto("");
+  await expect(page.locator('meta[name="apple-mobile-web-app-status-bar-style"]')).toHaveAttribute("content", "default");
+  const links = page.locator('link[rel="apple-touch-startup-image"]');
+  await expect(links).toHaveCount(startupImages.length);
+  const hrefs = await links.evaluateAll((els) => els.map((e) => e.getAttribute("href")));
+  for (const href of hrefs) {
+    const r = await page.request.get(new URL(href!, page.url()).toString());
+    expect(r.status(), href!).toBe(200);
+  }
 });
