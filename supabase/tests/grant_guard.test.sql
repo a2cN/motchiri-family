@@ -28,6 +28,8 @@ create function pg_temp.anon_executable_functions() returns setof text language 
       select 1 from pg_depend as d
       where d.classid = 'pg_proc'::regclass and d.objid = p.oid and d.deptype = 'e'
     )
+    -- イベントトリガーの関数(Supabase の rls_auto_enable など)は SQL・RPC から直接呼べないので除く(OD-auth-household-23 A)
+    and p.prorettype <> 'event_trigger'::regtype
     and has_function_privilege('anon', p.oid, 'EXECUTE')
   order by 1
 $$;

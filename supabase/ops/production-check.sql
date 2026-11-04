@@ -28,6 +28,8 @@ fn as (
       select 1 from pg_depend as d
       where d.classid = 'pg_proc'::regclass and d.objid = p.oid and d.deptype = 'e'
     )
+    -- イベントトリガーの関数(Supabase の rls_auto_enable など)は SQL・RPC から直接呼べないので除く(OD-auth-household-23 A)
+    and p.prorettype <> 'event_trigger'::regtype
 ),
 -- anon(または全員 = grantee 0)に与えられている、表・ビュー・シーケンスの権限
 anon_rel_grants as (
