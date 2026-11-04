@@ -12,6 +12,8 @@ const ORIGIN = `http://127.0.0.1:${PORT}`;
 // 画面サイズ(30_architecture.md D-09)。家族の機種が分かったら、ここの機種名を変える。
 export default defineConfig({
   testDir: "./e2e",
+  // ローカルの Supabase にテストの利用者と世帯を作る(30_architecture.md Interfaces §8)
+  globalSetup: "./e2e/global-setup.ts",
   outputDir: "./e2e-artifacts/test-results",
   fullyParallel: true,
   forbidOnly: !!process.env.CI,

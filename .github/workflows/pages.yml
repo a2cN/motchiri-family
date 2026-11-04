@@ -1,6 +1,8 @@
 # 静的書き出しを GitHub Pages に公開する。
 # このワークフローは秘密(シークレット)を1つも使わない。
-# CI で回すゲート: 秘密の検査、lint、typecheck、test、build。E2E は回さない(30_architecture.md D-16。ローカルで npm run e2e)。
+# build が受け取る Supabase の URL と公開用キーは、リポジトリの Variables(公開される値。秘密ではない)。
+# CI で回すゲート: 秘密の検査、lint、typecheck、test、build、service_role の検査、DB のテスト(db ジョブ)。
+# E2E は回さない(ローカルで npm run e2e。ローカルの Supabase が要る)。
 name: pages
 
 on:
@@ -48,13 +50,35 @@ jobs:
       - run: npm run lint
       - run: npm run typecheck
       - run: npm test
-      - run: npm run build
+      - name: build(Supabase の URL と公開用キーは Variables から埋め込む)
+        run: npm run build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ vars.SUPABASE_PUBLISHABLE_KEY }}
+      - name: service_role・秘密のキーが、クライアントのコード・成果物・リポジトリに無いことの検査
+        run: npm run check:client-secrets
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ vars.SUPABASE_PUBLISHABLE_KEY }}
       - uses: actions/upload-pages-artifact@v5
         with:
           path: out
 
+  # 使い捨ての Supabase(Docker)を起動して、DB のテスト(RLS の見張り、GRANT の見張り、世帯の分離)を回す。秘密は使わない
+  db:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run db:start
+      - run: npm run db:test
+
   deploy:
-    needs: [secrets, verify]
+    needs: [secrets, verify, db]
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:

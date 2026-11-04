@@ -1,13 +1,16 @@
 import Link from "next/link";
+import { LogoutButton } from "@/components/auth/logout-button";
 
 const FRAME = "mx-auto flex h-14 w-full max-w-5xl items-center px-4 md:px-6";
 
 // トップ用のヘッダー。ここの「もっちりファミリー」がこの画面の h1。リンクにしない(今いる画面)。
+// 右にログアウト(OD-auth-household-16 B。docs の正典 auth)。
 export function PortalHeader() {
   return (
     <header className="border-b border-border bg-background">
-      <div className={FRAME}>
+      <div className={`${FRAME} justify-between`}>
         <h1 className="text-lg font-bold">もっちりファミリー</h1>
+        <LogoutButton />
       </div>
     </header>
   );

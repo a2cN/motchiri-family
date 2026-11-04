@@ -199,3 +199,57 @@ describe("色などの直書きの禁止(D-12、D-19)", () => {
     expect(m).toEqual([]);
   });
 });
+
+describe("新規登録などを呼ぶコードの禁止と、Supabase の import の置き場所(PT-02、30_architecture.md D-16)", () => {
+  it.each([
+    "signUp",
+    "signInWithOtp",
+    "signInWithOAuth",
+    "signInAnonymously",
+    "signInWithIdToken",
+    "signInWithSSO",
+    "resetPasswordForEmail",
+  ])("G14: .%s() の呼び出し", async (name) => {
+    const m = await errors(`export async function f(auth: any) {\n  await auth.${name}({});\n}\n`, "src/components/x.ts");
+    expect(m.some((x) => x.ruleId === "no-restricted-syntax" && x.message.includes("PT-02"))).toBe(true);
+  });
+
+  it("G14b: .auth.admin の使用", async () => {
+    const m = await errors(`export const a = (c: any) => c.auth.admin;\n`, "src/components/x.ts");
+    expect(m.some((x) => x.ruleId === "no-restricted-syntax" && x.message.includes("PT-02"))).toBe(true);
+  });
+
+  it("G14c: src/lib/supabase/ の中でも、signUp は呼べない", async () => {
+    const m = await errors(`export const f = (c: any) => c.auth.signUp({});\n`, "src/lib/supabase/x.ts");
+    expect(m.some((x) => x.ruleId === "no-restricted-syntax" && x.message.includes("PT-02"))).toBe(true);
+  });
+
+  it("G15: src/lib/supabase/ の外での @supabase/supabase-js の import", async () => {
+    const m = await errors(
+      `import { createClient } from "@supabase/supabase-js";\nexport const c = createClient;\n`,
+      "src/components/x.ts",
+    );
+    expect(ruleIds(m)).toContain("no-restricted-imports");
+  });
+
+  it("G15b: src/app/ の中でも import できない", async () => {
+    const m = await errors(
+      `import { createClient } from "@supabase/supabase-js";\nexport const c = createClient;\n`,
+      "src/app/x/page.tsx",
+    );
+    expect(ruleIds(m)).toContain("no-restricted-imports");
+  });
+
+  it("対照: src/lib/supabase/ の中での import と、signInWithPassword の呼び出しは通る", async () => {
+    const m = await errors(
+      `import { createClient } from "@supabase/supabase-js";\nexport const c = createClient;\nexport const f = (a: { signInWithPassword: (x: object) => unknown }) => a.signInWithPassword({});\n`,
+      "src/lib/supabase/x.ts",
+    );
+    expect(m).toEqual([]);
+  });
+
+  it("対照: src/lib/supabase/ の中でも next/headers は禁止のまま", async () => {
+    const m = await errors(`import { cookies } from "next/headers";\nexport const c = cookies;\n`, "src/lib/supabase/x.ts");
+    expect(ruleIds(m)).toContain("no-restricted-imports");
+  });
+});

@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Zen_Maru_Gothic } from "next/font/google";
+import { AuthGate } from "@/components/auth/auth-gate";
 import { startupImages } from "@/pwa/startup-images";
 import "./globals.css";
 
@@ -33,7 +34,9 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="ja" className={zenMaruGothic.variable}>
-      <body className="flex min-h-dvh flex-col font-sans">{children}</body>
+      <body className="flex min-h-dvh flex-col font-sans">
+        <AuthGate>{children}</AuthGate>
+      </body>
     </html>
   );
 }

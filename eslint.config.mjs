@@ -16,6 +16,26 @@ const COLOR_FUNCTION = String.raw`\b(rgba?|hsla?|oklch|oklab|lab|lch|hwb|color)\
 const colorMessage =
   "色の値は src/styles/tokens.css だけに書く。トークンのクラス(bg-primary など)を使う(ADR 0005 決定 1、UI-02)";
 
+// 新規登録・パスワードの再設定などを呼ぶコードの禁止(PT-02、30_architecture.md D-16)。
+// 家族のアカウントは人間が管理画面で作る。名前を変えた呼び出しはすり抜けうるので、@supabase/supabase-js の import を src/lib/supabase/ に限ることで補う。
+const PT02 = "PT-02: 新規登録・再設定などの経路を作らない。アカウントは人間が管理画面で作る";
+const authCalls = [
+  "signUp",
+  "signInWithOtp",
+  "signInWithOAuth",
+  "signInAnonymously",
+  "signInWithIdToken",
+  "signInWithSSO",
+  "resetPasswordForEmail",
+].map((name) => ({
+  selector: `CallExpression[callee.property.name='${name}']`,
+  message: `${name}() は呼べない。${PT02}`,
+}));
+const authAdmin = {
+  selector: "MemberExpression[property.name='admin'][object.property.name='auth']",
+  message: `auth.admin は使えない(管理用の API はブラウザに置かない)。${PT02}`,
+};
+
 const useServer = {
   selector: "ExpressionStatement[directive='use server']",
   message: `'use server'(Server Actions)は使えない。${ADR_0001}`,
@@ -39,6 +59,11 @@ const forbiddenFile = {
   message: `このファイルは置けない(Route Handler、Middleware、Proxy)。${ADR_0001}。manifest は manifest.ts(メタデータのファイル)で作る`,
 };
 
+const supabaseImport = {
+  name: "@supabase/supabase-js",
+  message: "@supabase/supabase-js を import してよいのは src/lib/supabase/ だけ(30_architecture.md D-16)",
+};
+
 const serverImports = {
   paths: [
     {
@@ -58,7 +83,7 @@ const serverImports = {
 
 // no-restricted-syntax は、同じファイルに当たる複数の設定ブロックで「上書き」になる(足し算にならない)。
 // そのため、ファイルの種類ごとに、そこに当てる全部の selector をまとめて1ブロックにする。
-const base = [useServer, ...colorLiteral];
+const base = [useServer, ...colorLiteral, ...authCalls, authAdmin];
 const appOnly = [forceDynamic, revalidate];
 
 const colorTokenClasses = [
@@ -102,14 +127,23 @@ const eslintConfig = defineConfig([
     "playwright-report/**",
     "e2e-artifacts/**",
     ".playwright-browsers/**",
+    // supabase gen types の生成物(npm run db:types)
+    "src/lib/supabase/database.types.ts",
   ]),
 
   // サーバー専用の機能(D-11)
   {
     files: ["src/**/*.{ts,tsx}"],
     rules: {
-      "no-restricted-imports": ["error", serverImports],
+      "no-restricted-imports": ["error", { paths: [...serverImports.paths, supabaseImport] }],
       "no-restricted-syntax": ["error", ...base],
+    },
+  },
+  // Supabase を使ってよい場所(src/lib/supabase/)。サーバー専用の import の禁止は残す
+  {
+    files: ["src/lib/supabase/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-imports": ["error", serverImports],
     },
   },
   {

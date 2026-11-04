@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AccountNote } from "@/components/auth/logout-button";
 import { PortalHeader, Main } from "@/components/site-header";
 import { portalModules } from "@/modules/registry";
 
@@ -20,6 +21,7 @@ export default function Home() {
             </li>
           ))}
         </ul>
+        <AccountNote />
       </Main>
     </>
   );

@@ -15,4 +15,6 @@ paths = [
   '''(^|/)playwright-report/''',
   '''(^|/)e2e-artifacts/''',
   '''(^|/)\.playwright-browsers/''',
+  '''(^|/)supabase/\.temp/''',
+  '''(^|/)supabase/\.branches/''',
 ]

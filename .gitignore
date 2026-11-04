@@ -47,3 +47,7 @@ next-env.d.ts
 
 # playwright のブラウザ本体(npm run e2e:install)
 /.playwright-browsers/
+
+# Supabase CLI の作業ファイル(npm run db:start が作る)
+/supabase/.temp/
+/supabase/.branches/
