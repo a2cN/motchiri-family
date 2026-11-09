@@ -5,7 +5,33 @@ export type Database = {
   
   "public": {
           Tables: {
-            "household": {
+            "genre": {
+                  Row: {
+                    "created_at": string,"default_location_id": string | null,"household_id": string,"id": string,"name": string,"sort_order": number,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"default_location_id"?: string | null,"household_id": string,"id"?: string,"name": string,"sort_order": number,"updated_at"?: string
+                  }
+                  Update: {
+                    "created_at"?: string,"default_location_id"?: string | null,"household_id"?: string,"id"?: string,"name"?: string,"sort_order"?: number,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "genre_household_id_default_location_id_fkey"
+      columns: ["household_id","default_location_id"]
+isOneToOne: false
+      referencedRelation: "location"
+      referencedColumns: ["household_id","id"]
+    },{
+      foreignKeyName: "genre_household_id_fkey"
+      columns: ["household_id"]
+isOneToOne: false
+      referencedRelation: "household"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"household": {
                   Row: {
                     "created_at": string,"id": string
                   }
@@ -18,6 +44,96 @@ export type Database = {
                   }
                   Relationships: [
                     
+                  ]
+                },"item": {
+                  Row: {
+                    "created_at": string,"genre_id": string | null,"household_id": string,"id": string,"is_regular": boolean,"item_kind": string,"last_expiry_days": number | null,"location_id": string | null,"name": string,"restock_at_count": number | null,"restock_at_level": string | null,"stock_level": string | null,"tracking": string,"unit_id": string | null,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"genre_id"?: string | null,"household_id": string,"id"?: string,"is_regular"?: boolean,"item_kind": string,"last_expiry_days"?: number | null,"location_id"?: string | null,"name": string,"restock_at_count"?: number | null,"restock_at_level"?: string | null,"stock_level"?: string | null,"tracking": string,"unit_id"?: string | null,"updated_at"?: string
+                  }
+                  Update: {
+                    "created_at"?: string,"genre_id"?: string | null,"household_id"?: string,"id"?: string,"is_regular"?: boolean,"item_kind"?: string,"last_expiry_days"?: number | null,"location_id"?: string | null,"name"?: string,"restock_at_count"?: number | null,"restock_at_level"?: string | null,"stock_level"?: string | null,"tracking"?: string,"unit_id"?: string | null,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "item_household_id_fkey"
+      columns: ["household_id"]
+isOneToOne: false
+      referencedRelation: "household"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "item_household_id_genre_id_fkey"
+      columns: ["household_id","genre_id"]
+isOneToOne: false
+      referencedRelation: "genre"
+      referencedColumns: ["household_id","id"]
+    },{
+      foreignKeyName: "item_household_id_location_id_fkey"
+      columns: ["household_id","location_id"]
+isOneToOne: false
+      referencedRelation: "location"
+      referencedColumns: ["household_id","id"]
+    },{
+      foreignKeyName: "item_household_id_unit_id_fkey"
+      columns: ["household_id","unit_id"]
+isOneToOne: false
+      referencedRelation: "unit"
+      referencedColumns: ["household_id","id"]
+    }
+                  ]
+                },"item_stock": {
+                  Row: {
+                    "created_at": string,"expires_on": string | null,"household_id": string,"id": string,"item_id": string,"location_id": string | null,"purchased_on": string,"quantity": number,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"expires_on"?: string | null,"household_id": string,"id"?: string,"item_id": string,"location_id"?: string | null,"purchased_on"?: string,"quantity": number,"updated_at"?: string
+                  }
+                  Update: {
+                    "created_at"?: string,"expires_on"?: string | null,"household_id"?: string,"id"?: string,"item_id"?: string,"location_id"?: string | null,"purchased_on"?: string,"quantity"?: number,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "item_stock_household_id_fkey"
+      columns: ["household_id"]
+isOneToOne: false
+      referencedRelation: "household"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "item_stock_household_id_item_id_fkey"
+      columns: ["household_id","item_id"]
+isOneToOne: false
+      referencedRelation: "item"
+      referencedColumns: ["household_id","id"]
+    },{
+      foreignKeyName: "item_stock_household_id_location_id_fkey"
+      columns: ["household_id","location_id"]
+isOneToOne: false
+      referencedRelation: "location"
+      referencedColumns: ["household_id","id"]
+    }
+                  ]
+                },"location": {
+                  Row: {
+                    "created_at": string,"household_id": string,"id": string,"name": string,"sort_order": number,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"household_id": string,"id"?: string,"name": string,"sort_order": number,"updated_at"?: string
+                  }
+                  Update: {
+                    "created_at"?: string,"household_id"?: string,"id"?: string,"name"?: string,"sort_order"?: number,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "location_household_id_fkey"
+      columns: ["household_id"]
+isOneToOne: false
+      referencedRelation: "household"
+      referencedColumns: ["id"]
+    }
                   ]
                 },"member": {
                   Row: {
@@ -33,6 +149,26 @@ export type Database = {
                   Relationships: [
                     {
       foreignKeyName: "member_household_id_fkey"
+      columns: ["household_id"]
+isOneToOne: false
+      referencedRelation: "household"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"unit": {
+                  Row: {
+                    "created_at": string,"household_id": string,"id": string,"is_countable": boolean,"name": string,"sort_order": number,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"household_id": string,"id"?: string,"is_countable"?: boolean,"name": string,"sort_order": number,"updated_at"?: string
+                  }
+                  Update: {
+                    "created_at"?: string,"household_id"?: string,"id"?: string,"is_countable"?: boolean,"name"?: string,"sort_order"?: number,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "unit_household_id_fkey"
       columns: ["household_id"]
 isOneToOne: false
       referencedRelation: "household"

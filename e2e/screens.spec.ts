@@ -81,7 +81,16 @@ const screens: Screen[] = [
     },
   },
   { name: "top", status: 200, h1: "もっちりファミリー", prepare: loggedIn("", 200) },
-  { name: "stock", status: 200, h1: "もっちり倉庫", prepare: loggedIn("stock/", 200) },
+  {
+    name: "stock",
+    status: 200,
+    h1: "もっちり倉庫",
+    prepare: async (page) => {
+      await loggedIn("stock/", 200)(page);
+      // 世帯 A には品物が無い: 読み込みが終わって、空の状態が出る
+      await expect(page.getByText("食材の在庫はありません")).toBeVisible();
+    },
+  },
   // 存在しないパス。Pages と同じく 404.html が 404 で返る
   { name: "notfound", status: 404, h1: "ページが見つかりません", prepare: loggedIn("nai/", 404) },
 ];
@@ -121,7 +130,7 @@ test("トップに登録の数だけ入口があり、倉庫へ移って、ト�
   await page.getByRole("link", { name: "もっちり倉庫" }).click();
   await expect(page).toHaveURL(/\/motchiri-family\/stock\/$/);
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("もっちり倉庫");
-  await expect(page.getByRole("heading", { level: 2 })).toHaveText("まだ在庫はありません");
+  await expect(page.getByRole("heading", { level: 2 })).toHaveText("食材の在庫はありません");
   await page.getByRole("link", { name: "トップ" }).click();
   await expect(page).toHaveURL(/\/motchiri-family\/$/);
 });

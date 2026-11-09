@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "cn";
 
+// 倉庫の画面の部品(モックで承認した見た目。docs/design/stock-food/)。
 // ---- 通知(Sonner。6秒、同時に1つ) ----
 const SECONDS = 6;
 export const MSG_OFFLINE = "電波のある所で操作してください";
@@ -39,9 +40,9 @@ export function StateCard({
   );
 }
 
-export function RetryButton() {
+export function RetryButton({ onClick }: { onClick: () => void }) {
   return (
-    <Button type="button" className="min-w-40" onClick={() => window.location.reload()}>
+    <Button type="button" className="min-w-40" onClick={onClick}>
       もう一度
     </Button>
   );
@@ -54,6 +55,14 @@ export function OfflineCard({ className }: { className?: string }) {
     </StateCard>
   );
 }
+
+/** 数の入力の誤りの文(OD-stock-uiux-46 A) */
+export const QUANTITY_ERROR: Record<"empty" | "not_a_number" | "too_precise" | "not_positive", string> = {
+  empty: "個数を入れてください",
+  not_a_number: "数を入れてください",
+  too_precise: "小数は第一位までです",
+  not_positive: "0 より大きい数を入れてください",
+};
 
 // ---- 入力欄まわり ----
 export function Field({

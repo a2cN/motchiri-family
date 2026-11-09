@@ -1,27 +1,12 @@
-import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import path from "node:path";
+import { cli, parseJson, sql } from "./db";
 
 // E2E の前に、ローカルの Supabase にテストの利用者と世帯を作る(30_architecture.md Interfaces §8)。
 //   世帯 A: A1・A2 / 世帯 B: B1 / 世帯に結びつけない: U0
+//   倉庫(stock-food): 画面サイズ(project)ごとに世帯 S-<project> と2人(S1・S2)。倉庫の spec は自分の project の世帯だけを使う(D-21)
 // メールは e2e-…@example.com(架空)、パスワードは実行のたびの乱数。ローカルの秘密のキーはこのプロセスのメモリの中だけ(ファイルにもログにも出さない)。
 // 値は環境変数でテストのワーカーに渡す(E2E_…)。ローカル(127.0.0.1)以外には、何もしない。
-const root = path.resolve(__dirname, "..");
-const supabaseBin = path.join(root, "node_modules", ".bin", "supabase");
-
-function cli(args: string[]) {
-  return execFileSync(supabaseBin, args, { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
-}
-
-function parseJson(text: string) {
-  return JSON.parse(text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1));
-}
-
-function sql(query: string): Record<string, unknown>[] {
-  const text = cli(["db", "query", "--local", query]);
-  // 行を返さない文(delete、insert)は、JSON ではなく件数の文字列が返る
-  return text.includes("{") ? (parseJson(text).rows ?? []) : [];
-}
+export const STOCK_PROJECTS = ["ipad-portrait", "ipad-landscape", "iphone-portrait"] as const;
 
 export default async function globalSetup() {
   const status = parseJson(cli(["status", "-o", "json"]));
@@ -45,8 +30,16 @@ export default async function globalSetup() {
     U0: "e2e-u0@example.com",
   } as const;
 
+  const stockEmails: Record<string, string> = {};
+  for (const project of STOCK_PROJECTS) {
+    stockEmails[`S1_${project}`] = `e2e-s1-${project}@example.com`;
+    stockEmails[`S2_${project}`] = `e2e-s2-${project}@example.com`;
+    // スクリーンショットの spec の世帯(別のファイルが同じ世帯を同時に触らない。D-21)
+    stockEmails[`SH_${project}`] = `e2e-sh-${project}@example.com`;
+  }
+
   const ids: Record<string, string> = {};
-  for (const [who, email] of Object.entries(emails)) {
+  for (const [who, email] of [...Object.entries(emails), ...Object.entries(stockEmails)]) {
     const res = await fetch(`${apiUrl}/auth/v1/admin/users`, {
       method: "POST",
       headers: { "content-type": "application/json", apikey: adminKey, authorization: `Bearer ${adminKey}` },
@@ -62,6 +55,20 @@ export default async function globalSetup() {
   sql(
     `insert into public.member (user_id, household_id) values ('${ids.A1}', '${householdA}'), ('${ids.A2}', '${householdA}'), ('${ids.B1}', '${householdB}')`,
   );
+
+  for (const project of STOCK_PROJECTS) {
+    const household = String(sql("insert into public.household default values returning id")[0].id);
+    sql(
+      `insert into public.member (user_id, household_id) values ('${ids[`S1_${project}`]}', '${household}'), ('${ids[`S2_${project}`]}', '${household}')`,
+    );
+    process.env[`E2E_STOCK_${project}_HOUSEHOLD_ID`] = household;
+    process.env[`E2E_STOCK_${project}_S1_EMAIL`] = stockEmails[`S1_${project}`];
+    process.env[`E2E_STOCK_${project}_S2_EMAIL`] = stockEmails[`S2_${project}`];
+    const shots = String(sql("insert into public.household default values returning id")[0].id);
+    sql(`insert into public.member (user_id, household_id) values ('${ids[`SH_${project}`]}', '${shots}')`);
+    process.env[`E2E_STOCK_${project}_SHOTS_HOUSEHOLD_ID`] = shots;
+    process.env[`E2E_STOCK_${project}_SH_EMAIL`] = stockEmails[`SH_${project}`];
+  }
 
   process.env.E2E_SUPABASE_URL = apiUrl;
   process.env.E2E_SUPABASE_PUBLISHABLE_KEY = publishableKey;

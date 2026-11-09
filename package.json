@@ -14,7 +14,7 @@
     "secrets:scan": "gitleaks dir --redact --config .gitleaks.toml .",
     "contrast": "node scripts/contrast.mjs",
     "pwa-images": "node scripts/pwa-images.mjs",
-    "db:start": "supabase start -x realtime,storage-api,imgproxy,mailpit,postgres-meta,studio,edge-runtime,logflare,vector,supavisor",
+    "db:start": "supabase start -x storage-api,imgproxy,mailpit,postgres-meta,studio,edge-runtime,logflare,vector,supavisor",
     "db:stop": "supabase stop --no-backup",
     "db:reset": "supabase db reset --local",
     "db:test": "supabase test db && supabase db advisors --local --type security --fail-on error",

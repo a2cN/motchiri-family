@@ -37,7 +37,15 @@ export async function login(
   who: Who,
   { expect: expected = "ready", timeout }: { expect?: string; timeout?: number } = {},
 ) {
-  const { email, password } = credentials(who);
+  await loginWith(page, credentials(who), { expect: expected, timeout });
+}
+
+/** メールとパスワードを指定してログインする(倉庫の spec の利用者など)。 */
+export async function loginWith(
+  page: Page,
+  { email, password }: { email: string; password: string },
+  { expect: expected = "ready", timeout }: { expect?: string; timeout?: number } = {},
+) {
   await page.goto("");
   await expectAuthState(page, "signed-out");
   await fillLogin(page, email, password);

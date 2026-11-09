@@ -5,12 +5,12 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Toaster } from "@/components/ui/sonner";
 import { cn } from "cn";
 
-// run 1 の画面の枠(40_design_brief.md Component Specs 1)。下のタブ・サイドバー・ヘッダーの右は出さない。
+// run 1 の画面の枠(docs/design/stock-food/brief.md Component Specs 1)。下のタブ・サイドバー・ヘッダーの右は出さない。
 // 本文は最大 792px で中央(iPad 横も iPad 縦と同じ配置)。
 
 const FRAME = "mx-auto flex h-14 w-full items-center px-4 md:px-6";
 
-export function MockToaster() {
+export function StockToaster() {
   return (
     <Toaster
       offset={{ bottom: "var(--toast-bottom, calc(24px + env(safe-area-inset-bottom)))" }}
@@ -96,7 +96,7 @@ export function Frame({
       <header className="border-b border-border bg-background">
         <div className={cn(FRAME, "max-w-[792px]")}>
           <Link
-            href={back === "top" ? "/mock/" : "/mock/stock/"}
+            href={back === "top" ? "/" : "/stock/"}
             className="inline-flex min-h-11 min-w-11 items-center text-lg text-foreground no-underline"
           >
             <span aria-hidden="true">‹ </span>

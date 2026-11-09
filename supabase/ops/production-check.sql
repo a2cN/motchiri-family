@@ -57,6 +57,14 @@ authed_privs as (
 ),
 fn_check as (
   select * from fn where nspname = 'private' and proname = 'current_household_ids'
+),
+-- 倉庫(stock_food migration)。世帯ごとのマスタの件数: ジャンル10・場所4・単位7
+masters as (
+  select h.id,
+    (select count(*) from public.genre where household_id = h.id) as genres,
+    (select count(*) from public.location where household_id = h.id) as locations,
+    (select count(*) from public.unit where household_id = h.id) as units
+  from public.household as h
 )
 select "check", ok, detail from (
   select 1 as n, 'Postgres の主版が 17(config.toml の major_version)' as "check",
@@ -75,9 +83,9 @@ select "check", ok, detail from (
     (select count(*) from anon_rel_grants) = 0 and (select count(*) from anon_fn_exec) = 0,
     'テーブル等 ' || (select count(*) from anon_rel_grants)::text || ' 件 / 関数 ' || (select count(*) from anon_fn_exec)::text || ' 件'
   union all
-  select 5, 'authenticated の権限が household: SELECT・member: SELECT だけ',
+  select 5, 'authenticated の権限が一覧のとおり(倉庫のテーブル5つを含む)',
     coalesce((select string_agg(relname || ':' || privs, ' / ' order by relname) from authed_privs), '')
-      = 'household:SELECT / member:SELECT',
+      = 'genre:SELECT / household:SELECT / item:INSERT,SELECT,UPDATE / item_stock:DELETE,INSERT,SELECT,UPDATE / location:SELECT / member:SELECT / unit:SELECT',
     coalesce((select string_agg(relname || ':' || privs, ' / ' order by relname) from authed_privs), '(なし)')
   union all
   select 6, 'ポリシーの数(household 1・member 1)',
@@ -108,6 +116,31 @@ select "check", ok, detail from (
     (select count(*) from public.household) = 0
       or (select count(*) from auth.users as u where not exists (select 1 from public.member as m where m.user_id = u.id)) = 0,
     (select count(*) from auth.users as u where not exists (select 1 from public.member as m where m.user_id = u.id))::text
+  union all
+  select 14, '倉庫のテーブル5つ(genre・location・unit・item・item_stock)があり、RLS が有効',
+    (select count(*) from tbl where nspname = 'public' and relname in ('genre', 'location', 'unit', 'item', 'item_stock') and relrowsecurity) = 5,
+    (select count(*) from tbl where nspname = 'public' and relname in ('genre', 'location', 'unit', 'item', 'item_stock') and relrowsecurity)::text || ' / 5'
+  union all
+  select 15, '倉庫のポリシーの数(genre 1・location 1・unit 1・item 3・item_stock 4)',
+    (select count(*) from pg_policies where schemaname = 'public' and tablename in ('genre', 'location', 'unit')) = 3
+      and (select count(*) from pg_policies where schemaname = 'public' and tablename = 'item') = 3
+      and (select count(*) from pg_policies where schemaname = 'public' and tablename = 'item_stock') = 4,
+    'genre・location・unit ' || (select count(*) from pg_policies where schemaname = 'public' and tablename in ('genre', 'location', 'unit'))::text
+      || ' / item ' || (select count(*) from pg_policies where schemaname = 'public' and tablename = 'item')::text
+      || ' / item_stock ' || (select count(*) from pg_policies where schemaname = 'public' and tablename = 'item_stock')::text
+  union all
+  select 16, 'realtime.messages のポリシーが household_broadcast_select の1つ(to authenticated、SELECT)',
+    (select count(*) from pg_policies where schemaname = 'realtime' and tablename = 'messages' and policyname = 'household_broadcast_select' and cmd = 'SELECT' and roles = '{authenticated}') = 1,
+    (select count(*) from pg_policies where schemaname = 'realtime' and tablename = 'messages' and policyname = 'household_broadcast_select' and cmd = 'SELECT' and roles = '{authenticated}')::text || ' 件'
+  union all
+  select 17, '倉庫の変更の知らせの trigger が5つ、household の初期マスタの trigger が1つ',
+    (select count(*) from pg_trigger as t where not t.tgisinternal and t.tgname like '%\_broadcast' and t.tgrelid::regclass::text in ('genre', 'location', 'unit', 'item', 'item_stock')) = 5
+      and (select count(*) from pg_trigger as t where not t.tgisinternal and t.tgname = 'household_seed_masters') = 1,
+    (select count(*) from pg_trigger as t where not t.tgisinternal and t.tgname like '%\_broadcast')::text || ' / ' || (select count(*) from pg_trigger as t where not t.tgisinternal and t.tgname = 'household_seed_masters')::text
+  union all
+  select 18, '世帯ごとの初期マスタの件数(ジャンル10・場所4・単位7)',
+    (select count(*) from masters where genres < 10 or locations < 4 or units < 7) = 0,
+    coalesce((select string_agg(genres::text || '・' || locations::text || '・' || units::text, ' / ') from masters), '(世帯なし)')
   union all
   -- 参考(合否に使わない。ok は常に true)
   select 12, '(参考)postgres が public に作るテーブルの既定の権限(anon・authenticated)',
