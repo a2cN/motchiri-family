@@ -73,7 +73,8 @@ test("世帯に結びついた利用者: ログイン → 再読み込み → �
 
   await login(page, "A1");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("もっちりファミリー");
-  await expect(page.getByText(`ログイン中: ${credentials("A1").email}`)).toBeVisible();
+  // ログイン中の人は出さない(OD-auth-household-24 C)
+  await expect(page.getByText("ログイン中")).toHaveCount(0);
   // 時間の見直しの材料がコンソールに出る(OD-auth-household-22)
   expect(logs.some((l) => l.includes("[auth] 世帯の確かめ:"))).toBe(true);
 
@@ -107,7 +108,7 @@ test("ログインしたあと、開いていた URL の画面がそのまま出
 test("世帯に結びついていない利用者: その画面が出て、ログアウトできる", async ({ page }) => {
   await login(page, "U0", { expect: "unlinked" });
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("まだ世帯に入っていません");
-  await expect(page.getByText(`ログイン中: ${credentials("U0").email}`)).toBeVisible();
+  await expect(page.getByText("ログイン中")).toHaveCount(0);
   await page.getByRole("button", { name: "ログアウト" }).click();
   await expectAuthState(page, "signed-out");
 });

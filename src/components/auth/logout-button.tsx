@@ -13,13 +13,3 @@ export function LogoutButton() {
   );
 }
 
-// ログイン中の人(OD-auth-household-17 A)。トップのタイルの格子の下。
-export function AccountNote() {
-  const { email } = useAuth();
-  if (!email) return null;
-  return (
-    <section aria-label="アカウント" className="mt-12">
-      <p className="text-base wrap-anywhere text-muted-foreground">ログイン中: {email}</p>
-    </section>
-  );
-}
