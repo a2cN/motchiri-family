@@ -1,6 +1,7 @@
 {
   "pairs": [
     { "fg": "foreground", "bg": "muted", "min": 4.5, "use": "空の状態の見出し" },
+    { "fg": "muted-foreground", "bg": "muted", "min": 4.5, "use": "状態のカードの本文(読み込み中・エラー・オフライン・見つからない品物)" },
     { "fg": "muted-foreground", "bg": "background", "min": 4.5, "use": "画面の地の上の補足の文字" },
     { "fg": "muted-foreground", "bg": "card", "min": 4.5, "use": "カードの中の補足の文字、チェック済みの行" },
     { "fg": "destructive", "bg": "background", "min": 4.5, "use": "入力の誤りの文字" },
