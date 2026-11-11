@@ -107,7 +107,7 @@ const shots: Shot[] = [
       void info;
       sql(`delete from public.item_stock where household_id = '${household}' and item_id = (select id from public.item where household_id = '${household}' and name = '納豆')`);
       await page.getByRole("button", { name: "納豆を1増やす" }).click();
-      await expect(page.getByText("納豆は、もう使い切られていました")).toBeVisible();
+      await expect(page.getByText("納豆の在庫は、もうありませんでした")).toBeVisible();
     },
   },
 ];
@@ -230,7 +230,7 @@ const subs: Sub[] = [
     prepare: async (page, info) => {
       const id = String(sql(`select id from public.item where household_id = '${stockHousehold(info, "shots")}' and name = '食パン'`)[0].id);
       await page.goto(`stock/item-edit/?id=${id}`);
-      await expect(page.getByRole("heading", { level: 2, name: "食パン" })).toBeVisible();
+      await expect(page.locator("#edit-name")).toHaveValue("食パン");
       await expect(page.getByText("在庫はありません")).toBeVisible();
     },
   },
@@ -255,7 +255,7 @@ const subs: Sub[] = [
 async function openEdit(page: Page, name: string) {
   await page.getByRole("link", { name: `${name}を編集` }).first().click();
   await expect(page.locator("h1")).toHaveText("品物の編集");
-  await expect(page.getByRole("heading", { level: 2, name })).toBeVisible();
+  await expect(page.locator("#edit-name")).toHaveValue(name);
 }
 
 for (const sub of subs) {

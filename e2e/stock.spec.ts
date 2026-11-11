@@ -304,7 +304,7 @@ test("相手が先に使い切っていたら、行が消えて知らせが出�
   await openStock(page, info);
   sql(`delete from public.item_stock where household_id = '${household}' and item_id = (select id from public.item where household_id = '${household}' and name = '納豆')`);
   await page.getByRole("button", { name: "納豆を1増やす" }).click();
-  await expect(page.getByText("納豆は、もう使い切られていました")).toBeVisible();
+  await expect(page.getByText("納豆の在庫は、もうありませんでした")).toBeVisible();
   await expect(row(page, "納豆")).toHaveCount(0);
 });
 

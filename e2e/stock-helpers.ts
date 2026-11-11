@@ -8,19 +8,29 @@ import { sql } from "./db";
 
 export const FIXED_NOW = new Date("2026-10-23T12:00:00+09:00"); // 金曜。期限間近の範囲が8日間になる日(40_design_brief.md)
 
-/** suite: "main"(stock.spec.ts。S1・S2)、"shots"(stock-screens.spec.ts。別の世帯。同じ世帯を2つのワーカーが同時に触らないため) */
-export type Suite = "main" | "shots";
+/**
+ * suite: "main"(stock.spec.ts。S1・S2)、"shots"(stock-screens.spec.ts。別の世帯。同じ世帯を2つのワーカーが同時に触らないため)、
+ * "master"(stock-master.spec.ts。M1・M2。マスタを変える)、"mshots"(stock-master-screens.spec.ts)
+ */
+export type Suite = "main" | "shots" | "master" | "mshots";
+
+const SUITE_KEYS: Record<Suite, { household: string; email: (n: 1 | 2) => string }> = {
+  main: { household: "HOUSEHOLD_ID", email: (n) => `S${n}_EMAIL` },
+  shots: { household: "SHOTS_HOUSEHOLD_ID", email: () => "SH_EMAIL" },
+  master: { household: "MASTER_HOUSEHOLD_ID", email: (n) => `M${n}_EMAIL` },
+  mshots: { household: "MSHOTS_HOUSEHOLD_ID", email: () => "MS_EMAIL" },
+};
 
 export function stockWho(info: TestInfo, n: 1 | 2, suite: Suite = "main") {
   const p = info.project.name;
-  const email = process.env[suite === "shots" ? `E2E_STOCK_${p}_SH_EMAIL` : `E2E_STOCK_${p}_S${n}_EMAIL`];
+  const email = process.env[`E2E_STOCK_${p}_${SUITE_KEYS[suite].email(n)}`];
   const password = process.env.E2E_PASSWORD;
   if (!email || !password) throw new Error("倉庫のテストの利用者がありません(e2e/global-setup.ts が作る)");
   return { email, password };
 }
 
 export function stockHousehold(info: TestInfo, suite: Suite = "main"): string {
-  const id = process.env[suite === "shots" ? `E2E_STOCK_${info.project.name}_SHOTS_HOUSEHOLD_ID` : `E2E_STOCK_${info.project.name}_HOUSEHOLD_ID`];
+  const id = process.env[`E2E_STOCK_${info.project.name}_${SUITE_KEYS[suite].household}`];
   if (!id) throw new Error("倉庫のテストの世帯がありません(e2e/global-setup.ts が作る)");
   return id;
 }
@@ -28,6 +38,23 @@ export function stockHousehold(info: TestInfo, suite: Suite = "main"): string {
 /** 世帯の品物と在庫を全部消す(マスタは残る。在庫は品物の削除で cascade) */
 export function resetStock(household: string) {
   sql(`delete from public.item where household_id = '${household}'`);
+}
+
+/**
+ * run 2 の spec の始めに、世帯を初期の状態に戻す: 品物(在庫は cascade)→ マスタ3つ(ジャンル → 場所・単位)を消し、初期値を入れ直す。
+ * 消す順が逆だと、ジャンルの既定の場所・品物の参照で止まる(30_architecture.md Interfaces §10)。
+ */
+export function resetMasters(household: string) {
+  sql(`delete from public.item where household_id = '${household}'`);
+  sql(`delete from public.genre where household_id = '${household}'`);
+  sql(`delete from public.location where household_id = '${household}'`);
+  sql(`delete from public.unit where household_id = '${household}'`);
+  sql(`select private.seed_household_masters('${household}')`);
+}
+
+/** 食材のうち、いつものにする品物(名前)を決める */
+export function setRegular(household: string, names: string[]) {
+  sql(`update public.item set is_regular = true where household_id = '${household}' and name in (${names.map((n) => `'${n.replace(/'/g, "''")}'`).join(", ")})`);
 }
 
 type Seed = { name: string; tracking: "count" | "level"; unit: string; genre: string; location: string; level?: string; lastExpiryDays?: number };

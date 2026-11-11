@@ -35,10 +35,26 @@ export type ItemStock = Base & {
   expiresOn: string | null;
 };
 
-export type NewItem = Omit<Item, "createdAt" | "updatedAt">;
+/** createdAt は「元に戻す」の作り直しで、元の作った時刻(品物の一覧の登録順)を入れるときだけ */
+export type NewItem = Omit<Item, "createdAt" | "updatedAt"> & { createdAt?: string };
 export type NewItemStock = Omit<ItemStock, "createdAt" | "updatedAt"> & { createdAt?: string };
 
-export type ItemPatch = Partial<Pick<Item, "genreId" | "unitId" | "locationId" | "stockLevel" | "lastExpiryDays">>;
+/** 種別(itemKind)は変えられない(OD-stock-uiux-19 A)ので入れない */
+export type ItemPatch = Partial<
+  Pick<
+    Item,
+    | "name" | "genreId" | "unitId" | "locationId" | "stockLevel" | "lastExpiryDays" | "isRegular"
+    | "tracking" | "restockAtCount" | "restockAtLevel"
+  >
+>;
+/** マスタの値の変更。defaultLocationId はジャンルだけ、isCountable は単位だけ */
+export type MasterPatch = Partial<{ name: string; defaultLocationId: string | null; isCountable: boolean }>;
+export type MasterKind = "genre" | "location" | "unit";
+/** マスタの新しい行(updatedAt はサーバーが付ける。createdAt は作り直しで元の時刻を入れるときだけ) */
+export type NewGenre = Omit<Genre, "createdAt" | "updatedAt"> & { createdAt?: string };
+export type NewLocation = Omit<Location, "createdAt" | "updatedAt"> & { createdAt?: string };
+export type NewUnit = Omit<Unit, "createdAt" | "updatedAt"> & { createdAt?: string };
+export type NewMasterRow = NewGenre | NewLocation | NewUnit;
 export type StockPatch = Partial<Pick<ItemStock, "quantity" | "locationId" | "expiresOn">>;
 
 export type StockData = { genres: Genre[]; locations: Location[]; units: Unit[]; items: Item[]; stocks: ItemStock[] };

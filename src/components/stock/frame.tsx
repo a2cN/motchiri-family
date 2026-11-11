@@ -5,7 +5,8 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Toaster } from "@/components/ui/sonner";
 import { cn } from "cn";
 
-// run 1 の画面の枠(docs/design/stock-food/brief.md Component Specs 1)。下のタブ・サイドバー・ヘッダーの右は出さない。
+// 画面の枠(docs/design/stock-food/brief.md Component Specs 1、docs/design/stock-master/)。下のタブ・サイドバーは出さない(run 3)。
+// ヘッダーの右の「品物」「マスタ」は食材の在庫の一覧だけ(3つの画面サイズとも)。
 // 本文は最大 792px で中央(iPad 横も iPad 縦と同じ配置)。
 
 const FRAME = "mx-auto flex h-14 w-full items-center px-4 md:px-6";
@@ -74,6 +75,8 @@ function BottomBar({ children, allSizes }: { children: React.ReactNode; allSizes
 
 export function Frame({
   back,
+  backHref,
+  nav = false,
   title,
   headerRight,
   bar,
@@ -82,6 +85,10 @@ export function Frame({
   children,
 }: {
   back: "top" | "list";
+  /** 「‹ もどる」の行き先(省略時: top は /、list は /stock/) */
+  backHref?: string;
+  /** ヘッダーの右の「品物」「マスタ」(食材の在庫の一覧だけ) */
+  nav?: boolean;
   title: string;
   /** h1 の行の右(iPad 以上で出す「＋ 品物の登録」) */
   headerRight?: React.ReactNode;
@@ -94,14 +101,24 @@ export function Frame({
   return (
     <div className="flex min-h-dvh flex-1 flex-col">
       <header className="border-b border-border bg-background">
-        <div className={cn(FRAME, "max-w-[792px]")}>
+        <div className={cn(FRAME, "max-w-[792px] justify-between")}>
           <Link
-            href={back === "top" ? "/" : "/stock/"}
+            href={backHref ?? (back === "top" ? "/" : "/stock/")}
             className="inline-flex min-h-11 min-w-11 items-center text-lg text-foreground no-underline"
           >
             <span aria-hidden="true">‹ </span>
             {back === "top" ? "トップ" : "もどる"}
           </Link>
+          {nav && (
+            <nav aria-label="倉庫のほかの画面" className="flex items-center gap-2">
+              <Link href="/stock/items/" className="inline-flex min-h-11 min-w-11 items-center justify-center text-base text-foreground no-underline">
+                品物
+              </Link>
+              <Link href="/stock/masters/" className="inline-flex min-h-11 min-w-11 items-center justify-center text-base text-foreground no-underline">
+                マスタ
+              </Link>
+            </nav>
+          )}
         </div>
       </header>
       <main className={cn("mx-auto w-full flex-1 px-4 pt-6 md:px-6", widthClass)} style={{ paddingBottom: "calc(var(--bottom-stack-h, 0px) + 24px + env(safe-area-inset-bottom))" }}>

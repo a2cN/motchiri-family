@@ -3,7 +3,7 @@
 import { usePathname, useRouter } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { useAuth } from "@/components/auth/auth-context";
-import { StockStore, type StockSnapshot } from "@/modules/stock/store";
+import { StockStore, type FailureNotice, type StockSnapshot } from "@/modules/stock/store";
 import type { RegistrationInput } from "@/modules/stock/registration";
 import { StockToaster } from "./frame";
 import { notify } from "./bits";
@@ -23,6 +23,25 @@ type StockContextValue = {
 
 const StockContext = createContext<StockContextValue | null>(null);
 
+/** 失敗の知らせの文(docs/design/stock-master/ OD-stock-master-02 (1)(2)) */
+export function failureMessage(n: FailureNotice): string {
+  switch (n.kind) {
+    case "gone":
+      return `${n.itemName}の在庫は、もうありませんでした`;
+    case "item_gone":
+    case "master_gone":
+      return `${n.itemName}は、もう削除されていました`;
+    case "in_use":
+      return `${n.itemName}は使用中になったため、削除できませんでした`;
+    case "name_taken":
+      return `同じ名前の${n.subject ?? "品物"}があるため、「${n.itemName}」${n.adding ? "を追加" : "に"}できませんでした`;
+    case "undo_failed":
+      return `${n.itemName}を元に戻せませんでした`;
+    default:
+      return `${n.itemName}を保存できませんでした。電波のよい場所で、もう一度お試しください。`;
+  }
+}
+
 export function StockProvider({ children }: { children: React.ReactNode }) {
   const { householdId } = useAuth();
   if (!householdId) return null;
@@ -37,13 +56,7 @@ function Inner({ householdId, children }: { householdId: string; children: React
 
   useEffect(() => {
     store.start();
-    const off = store.onFailure((n) => {
-      notify(
-        n.kind === "gone"
-          ? `${n.itemName}は、もう使い切られていました`
-          : `${n.itemName}を保存できませんでした。電波のよい場所で、もう一度お試しください。`,
-      );
-    });
+    const off = store.onFailure((n) => notify(failureMessage(n)));
     return () => {
       off();
       store.stop();

@@ -1,7 +1,8 @@
 import type { Database } from "./database.types";
 import { getSupabase } from "./client";
 import type {
-  AnyStockRow, Genre, Item, ItemPatch, ItemStock, Location, NewItem, NewItemStock, StockData, StockLevel, StockPatch, Unit,
+  AnyStockRow, Genre, Item, ItemPatch, ItemStock, Location, MasterPatch, NewItem, NewItemStock, NewMasterRow, StockData, StockLevel,
+  StockPatch, Unit,
 } from "@/modules/stock/types";
 
 // 倉庫のデータの読み書き(supabase-js を呼ぶのはここだけ。30_architecture.md Interfaces §4)。
@@ -11,7 +12,12 @@ type Tables = Database["public"]["Tables"];
 type Row<T extends keyof Tables> = Tables[T]["Row"];
 
 export type StockTable = "genre" | "location" | "unit" | "item" | "item_stock";
-export type StockFailure = "network" | "timeout" | "not_found" | "name_taken" | "forbidden" | "unknown";
+export type StockFailure =
+  | "network" | "timeout" | "not_found" | "name_taken"
+  /** 23503(外部キー: 使用中の値を消そうとした / 消えた値を指そうとした)、23514(制約: 残量で管理の品物への在庫 など) */
+  | "conflict"
+  | "forbidden" | "unknown";
+export type MasterTable = "genre" | "location" | "unit";
 export type StockResult<T> = { ok: true; value: T } | { ok: false; reason: StockFailure };
 
 // ---- 行の変換(DB の列 ⇄ 画面の型) ----
@@ -67,7 +73,8 @@ type ErrorLike = { code?: string; message?: string; details?: string } | null;
 function classify(error: ErrorLike): StockFailure {
   if (!error) return "unknown";
   if (error.code === "42501") return "forbidden";
-  if (error.code === "23505" && /item_household_id_name_key/.test(`${error.message ?? ""} ${error.details ?? ""}`)) return "name_taken";
+  if (error.code === "23505" && /(item|genre|location|unit)_household_id_name_key/.test(`${error.message ?? ""} ${error.details ?? ""}`)) return "name_taken";
+  if (error.code === "23503" || error.code === "23514") return "conflict";
   // supabase-js は fetch の例外を、code が空のエラーとして返す
   if (!error.code && /fetch|network|load failed|abort|timed? ?out/i.test(error.message ?? "")) return "network";
   return "unknown";
@@ -115,6 +122,11 @@ export function fetchStockData(householdId: string, signal: AbortSignal): Promis
 // ---- 品物 ----
 const itemColumns = (p: ItemPatch): Partial<Tables["item"]["Update"]> => {
   const out: Partial<Tables["item"]["Update"]> = {};
+  if ("name" in p) out.name = p.name;
+  if ("tracking" in p) out.tracking = p.tracking;
+  if ("restockAtCount" in p) out.restock_at_count = p.restockAtCount;
+  if ("restockAtLevel" in p) out.restock_at_level = p.restockAtLevel;
+  if ("isRegular" in p) out.is_regular = p.isRegular;
   if ("genreId" in p) out.genre_id = p.genreId;
   if ("unitId" in p) out.unit_id = p.unitId;
   if ("locationId" in p) out.location_id = p.locationId;
@@ -142,6 +154,7 @@ export function insertItem(row: NewItem, signal: AbortSignal): Promise<StockResu
         restock_at_level: row.restockAtLevel,
         is_regular: row.isRegular,
         last_expiry_days: row.lastExpiryDays,
+        ...(row.createdAt ? { created_at: row.createdAt } : {}),
       })
       .select()
       .abortSignal(signal)
@@ -214,6 +227,87 @@ export function updateStock(id: string, patch: StockPatch, signal: AbortSignal):
 export function deleteStock(id: string, signal: AbortSignal): Promise<StockResult<null>> {
   return guarded(async () => {
     const { error } = await getSupabase().from("item_stock").delete().eq("id", id).abortSignal(signal);
+    return error ? { ok: false, reason: classify(error) } : { ok: true, value: null };
+  });
+}
+
+
+/** 0 行でも ok(もう無い)。在庫は外部キーの cascade で消える */
+export function deleteItem(id: string, signal: AbortSignal): Promise<StockResult<null>> {
+  return guarded(async () => {
+    const { error } = await getSupabase().from("item").delete().eq("id", id).abortSignal(signal);
+    return error ? { ok: false, reason: classify(error) } : { ok: true, value: null };
+  });
+}
+
+/** 空(null)のときだけ書き戻す。0 行でも ok(その間に相手が別の値にした) */
+export function restoreReference(
+  ref: { table: "genre"; column: "default_location_id" } | { table: "item"; column: "location_id" | "unit_id" },
+  id: string,
+  value: string,
+  signal: AbortSignal,
+): Promise<StockResult<null>> {
+  return guarded(async () => {
+    const db = getSupabase();
+    const { error } =
+      ref.table === "genre"
+        ? await db.from("genre").update({ default_location_id: value }).eq("id", id).is("default_location_id", null).abortSignal(signal)
+        : ref.column === "location_id"
+          ? await db.from("item").update({ location_id: value }).eq("id", id).is("location_id", null).abortSignal(signal)
+          : await db.from("item").update({ unit_id: value }).eq("id", id).is("unit_id", null).abortSignal(signal);
+    return error ? { ok: false, reason: classify(error) } : { ok: true, value: null };
+  });
+}
+
+// ---- マスタ(ジャンル・場所・単位) ----
+const toMaster = (table: MasterTable, r: unknown): Genre | Location | Unit =>
+  table === "genre" ? toGenre(r as Row<"genre">) : table === "location" ? toLocation(r as Row<"location">) : toUnit(r as Row<"unit">);
+
+export function insertMaster(table: MasterTable, row: NewMasterRow, signal: AbortSignal): Promise<StockResult<Genre | Location | Unit>> {
+  return guarded(async () => {
+    const db = getSupabase();
+    const common = {
+      id: row.id,
+      household_id: row.householdId,
+      name: row.name,
+      sort_order: row.sortOrder,
+      ...(row.createdAt ? { created_at: row.createdAt } : {}),
+    };
+    const result =
+      table === "genre"
+        ? await db.from("genre").insert({ ...common, default_location_id: (row as Genre).defaultLocationId ?? null }).select().abortSignal(signal).single()
+        : table === "location"
+          ? await db.from("location").insert(common).select().abortSignal(signal).single()
+          : await db.from("unit").insert({ ...common, is_countable: (row as Unit).isCountable }).select().abortSignal(signal).single();
+    if (!result.error) return { ok: true, value: toMaster(table, result.data) };
+    // 同じ id が既にある(送り直し・取り消しの重なり)は、その行を読んで ok
+    if (result.error.code === "23505" && new RegExp(`${table}_pkey`).test(result.error.message ?? "")) {
+      const again = await db.from(table).select().eq("id", row.id).abortSignal(signal).maybeSingle();
+      if (again.data) return { ok: true, value: toMaster(table, again.data) };
+    }
+    return { ok: false, reason: classify(result.error) };
+  });
+}
+
+export function updateMaster(table: MasterTable, id: string, patch: MasterPatch, signal: AbortSignal): Promise<StockResult<Genre | Location | Unit>> {
+  return guarded(async () => {
+    const db = getSupabase();
+    const name = "name" in patch && patch.name !== undefined ? { name: patch.name } : {};
+    const { data, error } =
+      table === "genre"
+        ? await db.from("genre").update({ ...name, ...("defaultLocationId" in patch ? { default_location_id: patch.defaultLocationId } : {}) }).eq("id", id).select().abortSignal(signal)
+        : table === "location"
+          ? await db.from("location").update(name).eq("id", id).select().abortSignal(signal)
+          : await db.from("unit").update({ ...name, ...("isCountable" in patch && patch.isCountable !== undefined ? { is_countable: patch.isCountable } : {}) }).eq("id", id).select().abortSignal(signal);
+    if (error) return { ok: false, reason: classify(error) };
+    return data && data.length > 0 ? { ok: true, value: toMaster(table, data[0]) } : { ok: false, reason: "not_found" };
+  });
+}
+
+/** 0 行でも ok(もう無い)。使用中(23503)は conflict */
+export function deleteMaster(table: MasterTable, id: string, signal: AbortSignal): Promise<StockResult<null>> {
+  return guarded(async () => {
+    const { error } = await getSupabase().from(table).delete().eq("id", id).abortSignal(signal);
     return error ? { ok: false, reason: classify(error) } : { ok: true, value: null };
   });
 }

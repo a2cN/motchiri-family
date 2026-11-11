@@ -121,8 +121,9 @@ select throws_ok(
 select is(pg_temp.affected_rows($$ update public.item set name = 'のっとり' where id = 'b2222222-0000-4000-8000-000000000002' $$), 0::bigint, 'A1: B の品物の update は 0 行');
 select is(pg_temp.affected_rows($$ update public.item_stock set quantity = 99 where id = 'b4444444-0000-4000-8000-000000000004' $$), 0::bigint, 'A1: B の在庫の update は 0 行');
 select is(pg_temp.affected_rows($$ delete from public.item_stock where id = 'b4444444-0000-4000-8000-000000000004' $$), 0::bigint, 'A1: B の在庫の delete は 0 行');
-select throws_ok($$ insert into public.genre (household_id, name, sort_order) values ('aaaaaaaa-0000-4000-8000-00000000000a', 'あたらしい', 11) $$, '42501', null, 'A1: マスタ(genre)は書けない(run 1 は SELECT だけ)');
-select throws_ok($$ delete from public.item where id = 'a1111111-0000-4000-8000-000000000001' $$, '42501', null, 'A1: 品物は削除できない(run 2 で足す)');
+-- run 2 でマスタの書き込みと品物の削除の権限を足した(書き込みの分離の本体は stock_master.test.sql)。ここでは世帯をまたぐ書き込みが止まることだけ確かめる
+select throws_ok($$ insert into public.genre (household_id, name, sort_order) values ('bbbbbbbb-0000-4000-8000-00000000000b', 'あたらしい', 11) $$, '42501', null, 'A1: 世帯 B のマスタ(genre)は書けない(RLS)');
+select is(pg_temp.affected_rows($$ delete from public.item where id = 'b2222222-0000-4000-8000-000000000002' $$), 0::bigint, 'A1: B の品物は削除できない(0 行)');
 
 -- ---- 3 世帯をまたぐ参照 ----
 select throws_ok(

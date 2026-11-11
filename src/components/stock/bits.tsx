@@ -5,11 +5,12 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { UNDO_WINDOW_MS } from "@/modules/stock/store";
 import { cn } from "cn";
 
 // 倉庫の画面の部品(モックで承認した見た目。docs/design/stock-food/)。
 // ---- 通知(Sonner。6秒、同時に1つ) ----
-const SECONDS = 6;
+const SECONDS = UNDO_WINDOW_MS / 1000;
 export const MSG_OFFLINE = "電波のある所で操作してください";
 
 export function notify(message: string, action?: { label: string; onClick: () => void }) {
@@ -48,10 +49,10 @@ export function RetryButton({ onClick }: { onClick: () => void }) {
   );
 }
 
-export function OfflineCard({ className }: { className?: string }) {
+export function OfflineCard({ className, subject = "在庫" }: { className?: string; subject?: string }) {
   return (
     <StateCard role="status" title="電波がありません" className={className}>
-      在庫は見られますが、変えられません。電波のある所で操作してください。
+      {subject}は見られますが、変えられません。電波のある所で操作してください。
     </StateCard>
   );
 }
@@ -201,4 +202,38 @@ export function QtyField({
       )}
     </div>
   );
+}
+
+/** 読み込み中・読み込みの失敗の本文(null なら読み込めている)。名詞だけ画面ごとに替える(docs/design/stock-master/ OD-stock-master-02 (1)) */
+export function loadStateBody({
+  load, offline, showLoadingText, noun, onRetry, className,
+}: {
+  load: "loading" | "ready" | "error";
+  offline: boolean;
+  showLoadingText: boolean;
+  noun: string;
+  onRetry: () => void;
+  className?: string;
+}): React.ReactNode {
+  if (load === "loading") {
+    return showLoadingText ? (
+      <StateCard role="status" className={className}>
+        読み込んでいます…
+      </StateCard>
+    ) : (
+      <></>
+    );
+  }
+  if (load === "error") {
+    return offline ? (
+      <StateCard title="電波がありません" className={className} action={<RetryButton onClick={onRetry} />}>
+        {noun}を読み込むには電波が要ります。電波のある所で、もう一度お試しください。
+      </StateCard>
+    ) : (
+      <StateCard title="つながりませんでした" className={className} action={<RetryButton onClick={onRetry} />}>
+        通信できなかったため、{noun}を読み込めませんでした。電波のよい場所で、もう一度お試しください。
+      </StateCard>
+    );
+  }
+  return null;
 }

@@ -85,7 +85,7 @@ select "check", ok, detail from (
   union all
   select 5, 'authenticated の権限が一覧のとおり(倉庫のテーブル5つを含む)',
     coalesce((select string_agg(relname || ':' || privs, ' / ' order by relname) from authed_privs), '')
-      = 'genre:SELECT / household:SELECT / item:INSERT,SELECT,UPDATE / item_stock:DELETE,INSERT,SELECT,UPDATE / location:SELECT / member:SELECT / unit:SELECT',
+      = 'genre:DELETE,INSERT,SELECT,UPDATE / household:SELECT / item:DELETE,INSERT,SELECT,UPDATE / item_stock:DELETE,INSERT,SELECT,UPDATE / location:DELETE,INSERT,SELECT,UPDATE / member:SELECT / unit:DELETE,INSERT,SELECT,UPDATE',
     coalesce((select string_agg(relname || ':' || privs, ' / ' order by relname) from authed_privs), '(なし)')
   union all
   select 6, 'ポリシーの数(household 1・member 1)',
@@ -121,9 +121,9 @@ select "check", ok, detail from (
     (select count(*) from tbl where nspname = 'public' and relname in ('genre', 'location', 'unit', 'item', 'item_stock') and relrowsecurity) = 5,
     (select count(*) from tbl where nspname = 'public' and relname in ('genre', 'location', 'unit', 'item', 'item_stock') and relrowsecurity)::text || ' / 5'
   union all
-  select 15, '倉庫のポリシーの数(genre 1・location 1・unit 1・item 3・item_stock 4)',
-    (select count(*) from pg_policies where schemaname = 'public' and tablename in ('genre', 'location', 'unit')) = 3
-      and (select count(*) from pg_policies where schemaname = 'public' and tablename = 'item') = 3
+  select 15, '倉庫のポリシーの数(genre・location・unit 各4・item 4・item_stock 4)',
+    (select count(*) from pg_policies where schemaname = 'public' and tablename in ('genre', 'location', 'unit')) = 12
+      and (select count(*) from pg_policies where schemaname = 'public' and tablename = 'item') = 4
       and (select count(*) from pg_policies where schemaname = 'public' and tablename = 'item_stock') = 4,
     'genre・location・unit ' || (select count(*) from pg_policies where schemaname = 'public' and tablename in ('genre', 'location', 'unit'))::text
       || ' / item ' || (select count(*) from pg_policies where schemaname = 'public' and tablename = 'item')::text
@@ -137,6 +137,10 @@ select "check", ok, detail from (
     (select count(*) from pg_trigger as t where not t.tgisinternal and t.tgname like '%\_broadcast' and t.tgrelid::regclass::text in ('genre', 'location', 'unit', 'item', 'item_stock')) = 5
       and (select count(*) from pg_trigger as t where not t.tgisinternal and t.tgname = 'household_seed_masters') = 1,
     (select count(*) from pg_trigger as t where not t.tgisinternal and t.tgname like '%\_broadcast')::text || ' / ' || (select count(*) from pg_trigger as t where not t.tgisinternal and t.tgname = 'household_seed_masters')::text
+  union all
+  select 19, '在庫の整合の trigger が4つ(item_drop_stocks_on_level・item_stock_require_count_item・location_release_references・unit_release_references)',
+    (select count(*) from pg_trigger as t where not t.tgisinternal and t.tgname in ('item_drop_stocks_on_level', 'item_stock_require_count_item', 'location_release_references', 'unit_release_references')) = 4,
+    (select count(*) from pg_trigger as t where not t.tgisinternal and t.tgname in ('item_drop_stocks_on_level', 'item_stock_require_count_item', 'location_release_references', 'unit_release_references'))::text || ' / 4'
   union all
   select 18, '世帯ごとの初期マスタの件数(ジャンル10・場所4・単位7)',
     (select count(*) from masters where genres < 10 or locations < 4 or units < 7) = 0,
