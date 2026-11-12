@@ -4,6 +4,7 @@ import { cli, parseJson, sql } from "./db";
 // E2E の前に、ローカルの Supabase にテストの利用者と世帯を作る(30_architecture.md Interfaces §8)。
 //   世帯 A: A1・A2 / 世帯 B: B1 / 世帯に結びつけない: U0
 //   倉庫(stock-food): 画面サイズ(project)ごとに世帯 S-<project> と2人(S1・S2)。倉庫の spec は自分の project の世帯だけを使う(D-21)
+//   倉庫(stock-supply): 同じく D-<project>(D1・D2。日用品の spec)と DS-<project>(DS。スクリーンショットの spec)。run 1・2 の世帯とは別(30_architecture.md S-12)
 //   倉庫(stock-master): 同じく M-<project>(M1・M2。マスタを変える spec)と MS-<project>(MS。スクリーンショットの spec)。マスタを変えるので別の世帯(30_architecture.md M-13)
 // メールは e2e-…@example.com(架空)、パスワードは実行のたびの乱数。ローカルの秘密のキーはこのプロセスのメモリの中だけ(ファイルにもログにも出さない)。
 // 値は環境変数でテストのワーカーに渡す(E2E_…)。ローカル(127.0.0.1)以外には、何もしない。
@@ -41,6 +42,10 @@ export default async function globalSetup() {
     stockEmails[`M1_${project}`] = `e2e-m1-${project}@example.com`;
     stockEmails[`M2_${project}`] = `e2e-m2-${project}@example.com`;
     stockEmails[`MS_${project}`] = `e2e-ms-${project}@example.com`;
+    // run 3a(stock-supply): 日用品の spec と、そのスクリーンショットの spec の世帯
+    stockEmails[`D1_${project}`] = `e2e-d1-${project}@example.com`;
+    stockEmails[`D2_${project}`] = `e2e-d2-${project}@example.com`;
+    stockEmails[`DS_${project}`] = `e2e-ds-${project}@example.com`;
   }
 
   const ids: Record<string, string> = {};
@@ -82,6 +87,15 @@ export default async function globalSetup() {
     sql(`insert into public.member (user_id, household_id) values ('${ids[`MS_${project}`]}', '${mshots}')`);
     process.env[`E2E_STOCK_${project}_MSHOTS_HOUSEHOLD_ID`] = mshots;
     process.env[`E2E_STOCK_${project}_MS_EMAIL`] = stockEmails[`MS_${project}`];
+    const supply = String(sql("insert into public.household default values returning id")[0].id);
+    sql(`insert into public.member (user_id, household_id) values ('${ids[`D1_${project}`]}', '${supply}'), ('${ids[`D2_${project}`]}', '${supply}')`);
+    process.env[`E2E_STOCK_${project}_SUPPLY_HOUSEHOLD_ID`] = supply;
+    process.env[`E2E_STOCK_${project}_D1_EMAIL`] = stockEmails[`D1_${project}`];
+    process.env[`E2E_STOCK_${project}_D2_EMAIL`] = stockEmails[`D2_${project}`];
+    const sshots = String(sql("insert into public.household default values returning id")[0].id);
+    sql(`insert into public.member (user_id, household_id) values ('${ids[`DS_${project}`]}', '${sshots}')`);
+    process.env[`E2E_STOCK_${project}_SSHOTS_HOUSEHOLD_ID`] = sshots;
+    process.env[`E2E_STOCK_${project}_DS_EMAIL`] = stockEmails[`DS_${project}`];
   }
 
   process.env.E2E_SUPABASE_URL = apiUrl;

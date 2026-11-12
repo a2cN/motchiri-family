@@ -142,6 +142,12 @@ select "check", ok, detail from (
     (select count(*) from pg_trigger as t where not t.tgisinternal and t.tgname in ('item_drop_stocks_on_level', 'item_stock_require_count_item', 'location_release_references', 'unit_release_references')) = 4,
     (select count(*) from pg_trigger as t where not t.tgisinternal and t.tgname in ('item_drop_stocks_on_level', 'item_stock_require_count_item', 'location_release_references', 'unit_release_references'))::text || ' / 4'
   union all
+  select 20, 'item に日用品の列2つ(supply_genre・note)と check 6つ(形2・種別4)がある',
+    (select count(*) from information_schema.columns where table_schema = 'public' and table_name = 'item' and column_name in ('supply_genre', 'note')) = 2
+      and (select count(*) from pg_constraint where conrelid = 'public.item'::regclass and conname in ('item_supply_genre_format', 'item_note_format', 'item_supply_genre_only_supply', 'item_note_only_supply', 'item_supply_no_genre_master', 'item_supply_no_location')) = 6,
+    (select count(*) from information_schema.columns where table_schema = 'public' and table_name = 'item' and column_name in ('supply_genre', 'note'))::text || ' 列 / '
+      || (select count(*) from pg_constraint where conrelid = 'public.item'::regclass and conname in ('item_supply_genre_format', 'item_note_format', 'item_supply_genre_only_supply', 'item_note_only_supply', 'item_supply_no_genre_master', 'item_supply_no_location'))::text || ' check'
+  union all
   select 18, '世帯ごとの初期マスタの件数(ジャンル10・場所4・単位7)',
     (select count(*) from masters where genres < 10 or locations < 4 or units < 7) = 0,
     coalesce((select string_agg(genres::text || '・' || locations::text || '・' || units::text, ' / ') from masters), '(世帯なし)')

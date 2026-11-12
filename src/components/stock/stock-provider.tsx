@@ -5,6 +5,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, u
 import { useAuth } from "@/components/auth/auth-context";
 import { StockStore, type FailureNotice, type StockSnapshot } from "@/modules/stock/store";
 import type { RegistrationInput } from "@/modules/stock/registration";
+import { itemNewHref } from "@/modules/stock/routes";
 import { StockToaster } from "./frame";
 import { notify } from "./bits";
 
@@ -66,7 +67,7 @@ function Inner({ householdId, children }: { householdId: string; children: React
   const requestRefill = useCallback(
     (input: RegistrationInput) => {
       setRefill({ input, nonce: Date.now() });
-      if (!pathname.replace(/\/$/, "").endsWith("/stock/item-new")) router.push("/stock/item-new/");
+      if (!pathname.replace(/\/$/, "").endsWith("/stock/item-new")) router.push(itemNewHref({ from: input.kind === "supply" ? "supply" : "stock" }));
     },
     [pathname, router],
   );

@@ -2,7 +2,7 @@ import { expect, test, type Page, type TestInfo } from "@playwright/test";
 import { findBottomOverlap, findHorizontalOverflow, findSmallInputs, findSmallTapTargets } from "./checks";
 import { loginWith } from "./auth-helpers";
 import { sql } from "./db";
-import { FIXED_NOW, openStock, resetStock, seedStock, shotPath, stockHousehold, stockWho } from "./stock-helpers";
+import { FIXED_NOW, openStock, resetStock, seedStock, shootScreen, stockHousehold, stockWho } from "./stock-helpers";
 
 // 倉庫の画面ごとのスクリーンショットと検査(30_architecture.md Interfaces §10)。承認済みのモックの状態(docs/design/stock-food/)ごとに撮る。
 // 出力先は E2E_SCREENSHOT_DIR/<プロジェクト名>/。時計は 2026-10-23(金)正午に固定する。
@@ -123,7 +123,7 @@ for (const shot of shots) {
     if (shot.seed !== false) await expect(page.getByRole("button", { name: "ヨーグルトを1増やす" })).toBeVisible();
     await shot.prepare(page, info, household);
     await page.waitForTimeout(500); // 通知の出入りと描画が落ち着くまで
-    await page.screenshot({ path: shotPath(info, shot.name), fullPage: !!shot.full });
+    await shootScreen(page, info, shot.name, !!shot.full);
     expect(await findHorizontalOverflow(page)).toBeNull();
     expect(await findSmallInputs(page)).toEqual([]);
     expect(await findSmallTapTargets(page)).toEqual([]);
@@ -175,6 +175,8 @@ const subs: Sub[] = [
     prepare: async (page) => {
       await page.getByLabel("品物名").fill("牛");
       await page.getByRole("button", { name: "牛乳", exact: true }).click();
+      // 種別の切り替えが増えて、小さい画面では単位が下の帯の裏に入る。中央へスクロールしてから押す
+      await chip(page, "単位", "個").evaluate((el) => el.scrollIntoView({ block: "center" }));
       await chip(page, "単位", "個").click();
       await page.getByRole("button", { name: "登録する" }).click();
       await expect(page.getByText("牛乳の在庫は「本」で数えています。「本」を選ぶか、在庫を使い切ってから登録してください。")).toBeVisible();
@@ -198,6 +200,8 @@ const subs: Sub[] = [
       await page.route(/\/rest\/v1\/item(\?|$)/, (route) => (route.request().method() === "POST" ? route.abort("connectionfailed") : route.continue()));
       await page.getByLabel("品物名").fill("トマト");
       await page.getByLabel("ジャンル").selectOption({ label: "野菜・果物" });
+      // 種別の切り替えが増えて、小さい画面では単位が下の帯の裏に入る。中央へスクロールしてから押す
+      await chip(page, "単位", "個").evaluate((el) => el.scrollIntoView({ block: "center" }));
       await chip(page, "単位", "個").click();
       await page.getByRole("button", { name: "登録する" }).click();
       await expect(page.getByText("トマトを登録できませんでした")).toBeVisible({ timeout: 15_000 });
@@ -272,7 +276,7 @@ for (const sub of subs) {
     if (sub.url.includes("item-new")) await expect(page.getByRole("button", { name: "登録する" })).toBeVisible();
     await sub.prepare(page, info);
     await page.waitForTimeout(500);
-    await page.screenshot({ path: shotPath(info, sub.name), fullPage: !!sub.full });
+    await shootScreen(page, info, sub.name, !!sub.full);
     expect(await findHorizontalOverflow(page)).toBeNull();
     expect(await findSmallInputs(page)).toEqual([]);
     expect(await findSmallTapTargets(page)).toEqual([]);

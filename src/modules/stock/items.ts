@@ -31,10 +31,10 @@ export function totalQuantity(itemId: string, data: StockData): number {
   return Math.round(sum * 10) / 10;
 }
 
-/** 食材の いつもの(run 2)。作った順 */
+/** いつもの(食材と日用品を混ぜて作った順。R3-8)。数の日用品の total は在庫の合計(0 もある) */
 export function regularRows(data: StockData): RegularRow[] {
   return data.items
-    .filter((i) => i.itemKind === "food" && i.isRegular)
+    .filter((i) => i.isRegular)
     .sort(byCreated)
     .map((item): RegularRow =>
       item.tracking === "level"
@@ -62,7 +62,8 @@ export type TrackingPlan = { itemPatch: ItemPatch; removedStocks: ItemStock[]; n
 /**
  * 管理のしかたの変更の計画(OD-stock-uiux-43 A・50 (6)、ブリーフ A1)。
  * 数 → 残量: 場所 = 在庫のうち作った時刻が最も新しいものの場所(無ければ品物のまま)、補充の目安は既定値(数: なし、残量: △で)、単位は残す、在庫は全部消える(DB の trigger)。
- * 残量 → 数: 在庫は個数が 0 より大きいときだけ作る(食材は 0 なら作らない)。
+ * 残量 → 数: 在庫は個数が 0 より大きいときだけ作る。ただし日用品は 0 個でも作る(在庫は品物に1つ、0 でも残る。OD-stock-uiux-50 (6) A)。
+ * 日用品の在庫は場所も期限も持たない(locationId = null)。
  */
 export function planTrackingChange(
   item: Item,
@@ -90,8 +91,11 @@ export function planTrackingChange(
     itemPatch: { tracking: "count", stockLevel: null, unitId: input.unitId, restockAtLevel: null, restockAtCount: null },
     removedStocks: [],
     newStock:
-      input.quantity > 0
-        ? { id: ids.stockId, householdId: ids.householdId, itemId: item.id, quantity: input.quantity, locationId: item.locationId, purchasedOn: today, expiresOn: null }
+      input.quantity > 0 || item.itemKind === "supply"
+        ? {
+            id: ids.stockId, householdId: ids.householdId, itemId: item.id, quantity: input.quantity,
+            locationId: item.itemKind === "supply" ? null : item.locationId, purchasedOn: today, expiresOn: null,
+          }
         : null,
   };
 }

@@ -131,7 +131,7 @@ test("トップに登録の数だけ入口があり、倉庫へ移って、ト�
   await expect(page).toHaveURL(/\/motchiri-family\/stock\/$/);
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("もっちり倉庫");
   await expect(page.getByRole("heading", { level: 2 })).toHaveText("食材の在庫はありません");
-  await page.getByRole("link", { name: "トップ" }).click();
+  await page.getByRole("link", { name: "トップ" }).first().click(); // iPad 横はサイドバーとヘッダーの両方に「‹ トップ」(正典)
   await expect(page).toHaveURL(/\/motchiri-family\/$/);
 });
 

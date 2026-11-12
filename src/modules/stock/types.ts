@@ -25,6 +25,10 @@ export type Item = Base & {
   isRegular: boolean;
   /** 前回の「期限 − 購入日」の日数。null は前回が無い */
   lastExpiryDays: number | null;
+  /** 日用品のジャンル(自由入力。マスタではない)。null = ジャンルなし。食材は null(OD-stock-supply-01 A) */
+  supplyGenre: string | null;
+  /** 日用品の備考。null = なし。食材は null */
+  note: string | null;
 };
 
 export type ItemStock = Base & {
@@ -44,7 +48,7 @@ export type ItemPatch = Partial<
   Pick<
     Item,
     | "name" | "genreId" | "unitId" | "locationId" | "stockLevel" | "lastExpiryDays" | "isRegular"
-    | "tracking" | "restockAtCount" | "restockAtLevel"
+    | "tracking" | "restockAtCount" | "restockAtLevel" | "supplyGenre" | "note"
   >
 >;
 /** マスタの値の変更。defaultLocationId はジャンルだけ、isCountable は単位だけ */
@@ -55,7 +59,7 @@ export type NewGenre = Omit<Genre, "createdAt" | "updatedAt"> & { createdAt?: st
 export type NewLocation = Omit<Location, "createdAt" | "updatedAt"> & { createdAt?: string };
 export type NewUnit = Omit<Unit, "createdAt" | "updatedAt"> & { createdAt?: string };
 export type NewMasterRow = NewGenre | NewLocation | NewUnit;
-export type StockPatch = Partial<Pick<ItemStock, "quantity" | "locationId" | "expiresOn">>;
+export type StockPatch = Partial<Pick<ItemStock, "quantity" | "locationId" | "expiresOn" | "purchasedOn">>;
 
 export type StockData = { genres: Genre[]; locations: Location[]; units: Unit[]; items: Item[]; stocks: ItemStock[] };
 

@@ -5,6 +5,8 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { normalizeForSearch } from "@/modules/stock/supply";
 import { UNDO_WINDOW_MS } from "@/modules/stock/store";
 import { cn } from "cn";
 
@@ -149,6 +151,7 @@ export function QtyField({
   unit,
   steppers,
   readOnly = false,
+  minusDisabled = false,
   error,
   onChange,
   onBlur,
@@ -160,6 +163,8 @@ export function QtyField({
   unit: string;
   steppers: boolean;
   readOnly?: boolean;
+  /** 0 の − を押せなくする(数の日用品。aria-disabled、見た目は変えない) */
+  minusDisabled?: boolean;
   error?: string | null;
   onChange: (v: string) => void;
   onBlur: () => void;
@@ -170,7 +175,7 @@ export function QtyField({
     <div>
       <div className="flex flex-wrap items-center gap-2">
         {steppers && (
-          <Button type="button" variant="secondary" size="icon" aria-label={`${label}を1減らす`} aria-disabled={readOnly || undefined} onClick={() => onStep(-1)}>
+          <Button type="button" variant="secondary" size="icon" aria-label={`${label}を1減らす`} aria-disabled={readOnly || minusDisabled || undefined} onClick={() => onStep(-1)}>
             <span aria-hidden="true">−</span>
           </Button>
         )}
@@ -236,4 +241,63 @@ export function loadStateBody({
     );
   }
   return null;
+}
+
+/**
+ * 日用品のジャンル(OD-stock-uiux-35 B・45 A): 自由入力 + いま使っている語の候補のチップ。空でもかまわない。
+ * onCommit は欄を離れたとき・チップを押したときに呼ぶ(品物の編集は、ここで保存する)。
+ */
+export function SupplyGenreField({
+  id, value, onChange, onCommit, candidates, readOnly = false,
+}: {
+  id: string;
+  value: string;
+  onChange: (v: string) => void;
+  onCommit?: (v: string) => void;
+  candidates: string[];
+  readOnly?: boolean;
+}) {
+  const q = normalizeForSearch(value.trim());
+  const shown = candidates.filter((c) => q === "" || normalizeForSearch(c).includes(q));
+  return (
+    <div className="mt-4 first:mt-0">
+      <Label htmlFor={id} className="mb-1">
+        ジャンル
+      </Label>
+      <Input
+        id={id}
+        value={value}
+        autoComplete="off"
+        readOnly={readOnly}
+        aria-describedby={`${id}-hint`}
+        onChange={(e) => onChange(e.target.value)}
+        onBlur={() => onCommit?.(value.trim())}
+      />
+      <p id={`${id}-hint`} className="mt-1 text-base text-muted-foreground">
+        空でもかまいません
+      </p>
+      <p className="sr-only" aria-live="polite">
+        {shown.length > 0 ? `候補 ${shown.length}件` : ""}
+      </p>
+      {shown.length > 0 && (
+        <div className="mt-2">
+          <ToggleGroup
+            aria-label="ジャンルの候補"
+            value={candidates.includes(value.trim()) ? [value.trim()] : []}
+            onValueChange={(v) => {
+              if (readOnly) return;
+              onChange(v[0] ?? "");
+              onCommit?.(v[0] ?? "");
+            }}
+          >
+            {shown.map((c) => (
+              <ToggleGroupItem key={c} value={c}>
+                {c}
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
+        </div>
+      )}
+    </div>
+  );
 }

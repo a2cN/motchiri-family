@@ -37,6 +37,8 @@ export function item(id: string, name: string, over: Partial<Item> = {}, n = 0):
     restockAtLevel: null,
     isRegular: false,
     lastExpiryDays: null,
+    supplyGenre: null,
+    note: null,
     ...over,
   };
 }

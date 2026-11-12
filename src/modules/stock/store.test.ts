@@ -509,6 +509,7 @@ describe("オフライン", () => {
 
 describe("登録", () => {
   const base = {
+    kind: "food" as const, supplyGenre: null, note: null,
     name: "ヨーグルト", tracking: "count" as const, genreId: "g-dairy", unitId: "u-ko", quantity: 3, stockLevel: "full" as const,
     locationId: "loc-fridge", purchasedOn: "2026-10-23", expiresOn: "2026-10-30",
   };
@@ -777,6 +778,7 @@ describe("品物の削除と「元に戻す」(規則 12・14・15)", () => {
     const h = await setupMilk();
     const handle = h.store.deleteItem("milk") as { undo: () => void };
     const reg = await h.store.register({
+      kind: "food", supplyGenre: null, note: null,
       name: "新しい品", tracking: "count", genreId: "g-veg", unitId: "u-ko", quantity: 1, stockLevel: "full",
       locationId: "loc-fridge", purchasedOn: "2026-10-23", expiresOn: null,
     });
@@ -896,8 +898,154 @@ describe("管理のしかたの変更(規則 13・14)", () => {
     const h = await setup({ items: [mayo2] });
     h.server.items.set("milk", { ...milk, tracking: "level", stockLevel: "full", unitId: null, updatedAt: h.server.stamp() }); // サーバーでは残量
     const r = await h.store.register({
+      kind: "food", supplyGenre: null, note: null,
       name: "牛乳", tracking: "count", genreId: "g-dairy", unitId: "u-ko", quantity: 1, stockLevel: "full", locationId: "loc-fridge", purchasedOn: "2026-10-23", expiresOn: null,
     });
     expect(r.ok).toBe(false);
+  });
+});
+
+describe("日用品(stock-supply 規則 18〜22)", () => {
+  const wrap = item("wrap", "ラップ", { itemKind: "supply", genreId: null, locationId: null, unitId: "u-ko", supplyGenre: "キッチン", note: null });
+  const shampoo = item("shampoo", "シャンプー", {
+    itemKind: "supply", tracking: "level", stockLevel: "full", genreId: null, locationId: null, unitId: null, restockAtLevel: "low",
+  });
+  const wrapStock = (q: number) => stock("w1", "wrap", q, { locationId: null });
+  const supplyRegister = {
+    kind: "supply" as const, supplyGenre: null, note: null, name: "ラップ", tracking: "count" as const, genreId: null, unitId: "u-ko",
+    quantity: 2, stockLevel: "full" as const, locationId: null, purchasedOn: "2026-10-23", expiresOn: null,
+  };
+
+  it("数の日用品: 0 にしても行を消さずに 0 を patch し、「使い切りました」を返す", async () => {
+    const h = await setup({ items: [wrap], stocks: [wrapStock(1)] });
+    const handle = h.store.stepSupply("wrap", -1);
+    expect(handle?.label).toBe("ラップを使い切りました");
+    expect(h.q("w1")?.quantity).toBe(0);
+    await flush();
+    expect(h.server.stocks.get("w1")?.quantity).toBe(0);
+    expect(h.server.calls.filter((c) => c.startsWith("deleteStock"))).toEqual([]);
+  });
+  it("「元に戻す」は前の数を patch で戻す(作り直さない)", async () => {
+    const h = await setup({ items: [wrap], stocks: [wrapStock(2.5)] });
+    const handle = h.store.stepSupply("wrap", -1);
+    expect(handle).toBeNull();
+    const h2 = await setup({ items: [wrap], stocks: [wrapStock(1)] });
+    const hd = h2.store.stepSupply("wrap", -1);
+    await flush();
+    hd?.undo();
+    expect(h2.q("w1")?.quantity).toBe(1);
+    await flush();
+    expect(h2.server.stocks.get("w1")?.quantity).toBe(1);
+    expect(h2.server.calls.filter((c) => c.startsWith("insertStock"))).toEqual([]);
+    expect(h2.server.calls.filter((c) => c.startsWith("updateStock")).at(-1)).toBe('updateStock:w1:{"quantity":1}');
+  });
+  it("0 のまま − は何もしない。+ は 1 に戻る", async () => {
+    const h = await setup({ items: [wrap], stocks: [wrapStock(0)] });
+    expect(h.store.stepSupply("wrap", -1)).toBeNull();
+    expect(h.server.calls.filter((c) => c.startsWith("updateStock"))).toEqual([]);
+    h.store.stepSupply("wrap", 1);
+    expect(h.q("w1")?.quantity).toBe(1);
+  });
+  it("在庫の行が無いとき + で新しい在庫(数 1・購入日は今日・場所なし・期限なし)を作る。− は何もしない", async () => {
+    const h = await setup({ items: [wrap] });
+    expect(h.store.stepSupply("wrap", -1)).toBeNull();
+    h.store.stepSupply("wrap", 1);
+    await flush();
+    expect(h.server.stocks.get("id-1")).toMatchObject({ itemId: "wrap", quantity: 1, locationId: null, expiresOn: null, purchasedOn: "2026-10-23" });
+  });
+  it("在庫が2行あるとき、± は作った順で最初の行だけを変え、合計が 0 でなければ「使い切りました」は出ない", async () => {
+    const h = await setup({ items: [wrap], stocks: [wrapStock(1), stock("w2", "wrap", 3, { locationId: null }, 1)] });
+    expect(h.store.stepSupply("wrap", -1)).toBeNull();
+    expect(h.q("w1")?.quantity).toBe(0);
+    expect(h.q("w2")?.quantity).toBe(3);
+  });
+  it("品物の編集の数の欄: 0 で「使い切りました」、ほかは handle なし", async () => {
+    const h = await setup({ items: [wrap], stocks: [wrapStock(2)] });
+    expect(h.store.setSupplyQuantity("wrap", 4)).toBeNull();
+    expect(h.store.setSupplyQuantity("wrap", 0)?.label).toBe("ラップを使い切りました");
+  });
+  it("失敗したら数が戻り save_failed、相手が先に残量にしていたら gone", async () => {
+    const h = await setup({ items: [wrap], stocks: [wrapStock(2)] });
+    h.server.failures.push("network");
+    h.store.stepSupply("wrap", 1);
+    await flush();
+    expect(h.q("w1")?.quantity).toBe(2);
+    expect(h.notices).toEqual([{ kind: "save_failed", itemName: "ラップ" }]);
+    h.server.stocks.delete("w1");
+    h.store.stepSupply("wrap", 1);
+    await flush();
+    expect(h.notices.at(-1)).toEqual({ kind: "gone", itemName: "ラップ" });
+  });
+  it("残量の日用品の 1 タップは cycleLevel(○→△→×→○)。数の操作は効かない", async () => {
+    const h = await setup({ items: [shampoo, wrap], stocks: [wrapStock(1)] });
+    h.store.cycleLevel("shampoo");
+    expect(h.it("shampoo")?.stockLevel).toBe("low");
+    expect(h.store.stepSupply("shampoo", 1)).toBeNull();
+    await flush();
+    expect(h.server.items.get("shampoo")?.stockLevel).toBe("low");
+  });
+  it("ジャンル・備考: 前後の空白を除き、空は null、同じなら送らない、食材には効かない", async () => {
+    const h = await setup({ items: [wrap, milk], stocks: [] });
+    h.store.setItemSupplyGenre("wrap", "  バス ");
+    h.store.setItemNote("wrap", "30cm\n  ");
+    h.store.setItemSupplyGenre("wrap", "バス");
+    h.store.setItemSupplyGenre("milk", "x");
+    h.store.setItemNote("milk", "x");
+    await flush();
+    expect(h.it("wrap")).toMatchObject({ supplyGenre: "バス", note: "30cm" });
+    expect(h.it("milk")).toMatchObject({ supplyGenre: null, note: null });
+    // ジャンル(送信中)→ 備考の2回。同じ値の再入力と食材は送らない
+    expect(h.server.calls.filter((c) => c.startsWith("updateItem"))).toHaveLength(2);
+    h.store.setItemSupplyGenre("wrap", " ");
+    expect(h.it("wrap")?.supplyGenre).toBeNull();
+  });
+  it("オフラインでは何もしない", async () => {
+    const h = await setup({ items: [wrap], stocks: [wrapStock(1)], online: false });
+    expect(h.store.stepSupply("wrap", 1)).toBeNull();
+    expect(h.store.setSupplyQuantity("wrap", 0)).toBeNull();
+    h.store.setItemNote("wrap", "x");
+    expect(h.q("w1")?.quantity).toBe(1);
+    expect(h.it("wrap")?.note).toBeNull();
+  });
+  it("登録: 既存の数の日用品は今の数に足し、購入日を書き換える(品物 → 在庫の順)", async () => {
+    const h = await setup({ items: [wrap], stocks: [wrapStock(1)] });
+    const r = await h.store.register({ ...supplyRegister, supplyGenre: "掃除" });
+    expect(r).toEqual({ ok: true });
+    await flush();
+    expect(h.server.stocks.get("w1")).toMatchObject({ quantity: 3, purchasedOn: "2026-10-23" });
+    expect(h.server.items.get("wrap")?.supplyGenre).toBe("掃除");
+    const calls = h.server.calls.filter((c) => /^update/.test(c));
+    expect(calls[0]).toMatch(/^updateItem:wrap/);
+    expect(calls[1]).toMatch(/^updateStock:w1/);
+  });
+  it("登録: 数の日用品の在庫が先に消えていたら登録の失敗(not_found)。入れ直すと新しい在庫ができる", async () => {
+    const h = await setup({ items: [wrap], stocks: [wrapStock(1)] });
+    h.server.stocks.delete("w1");
+    const r = await h.store.register(supplyRegister);
+    expect(r).toMatchObject({ ok: false, reason: "not_found" });
+    expect(h.notices).toEqual([]);
+    const again = await h.store.register(supplyRegister);
+    expect(again).toEqual({ ok: true });
+    await flush();
+    expect([...h.server.stocks.values()].map((s) => s.quantity)).toEqual([2]);
+  });
+  it("登録: 新しい日用品は場所なし・ジャンルのマスタなしで、数なら 0 より大きい在庫を作る", async () => {
+    const h = await setup();
+    const r = await h.store.register({ ...supplyRegister, name: "洗剤", supplyGenre: "掃除", note: "詰め替え" });
+    expect(r).toEqual({ ok: true });
+    await flush();
+    const row = [...h.server.items.values()][0];
+    expect(row).toMatchObject({ itemKind: "supply", genreId: null, locationId: null, supplyGenre: "掃除", note: "詰め替え", restockAtLevel: null });
+    expect([...h.server.stocks.values()][0]).toMatchObject({ locationId: null, expiresOn: null, quantity: 2 });
+  });
+  it("管理のしかた: 残量 → 数の日用品は 0 個でも在庫ができ、「元に戻す」で消える", async () => {
+    const h = await setup({ items: [shampoo] });
+    const handle = h.store.changeTracking("shampoo", { to: "count", unitId: "u-ko", quantity: 0 });
+    await flush();
+    expect([...h.server.stocks.values()]).toHaveLength(1);
+    expect([...h.server.stocks.values()][0]).toMatchObject({ quantity: 0, locationId: null });
+    handle?.undo();
+    await flush();
+    expect([...h.server.stocks.values()]).toHaveLength(0);
   });
 });

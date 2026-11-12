@@ -46,6 +46,8 @@ export const toItem = (r: Row<"item">): Item => ({
   restockAtLevel: r.restock_at_level as "low" | "out" | null,
   isRegular: r.is_regular,
   lastExpiryDays: r.last_expiry_days,
+  supplyGenre: r.supply_genre,
+  note: r.note,
 });
 export const toItemStock = (r: Row<"item_stock">): ItemStock => ({
   ...base(r),
@@ -132,6 +134,8 @@ const itemColumns = (p: ItemPatch): Partial<Tables["item"]["Update"]> => {
   if ("locationId" in p) out.location_id = p.locationId;
   if ("stockLevel" in p) out.stock_level = p.stockLevel;
   if ("lastExpiryDays" in p) out.last_expiry_days = p.lastExpiryDays;
+  if ("supplyGenre" in p) out.supply_genre = p.supplyGenre;
+  if ("note" in p) out.note = p.note;
   return out;
 };
 
@@ -154,6 +158,8 @@ export function insertItem(row: NewItem, signal: AbortSignal): Promise<StockResu
         restock_at_level: row.restockAtLevel,
         is_regular: row.isRegular,
         last_expiry_days: row.lastExpiryDays,
+        supply_genre: row.supplyGenre,
+        note: row.note,
         ...(row.createdAt ? { created_at: row.createdAt } : {}),
       })
       .select()
@@ -217,6 +223,7 @@ export function updateStock(id: string, patch: StockPatch, signal: AbortSignal):
     if ("quantity" in patch) columns.quantity = patch.quantity;
     if ("locationId" in patch) columns.location_id = patch.locationId;
     if ("expiresOn" in patch) columns.expires_on = patch.expiresOn;
+    if ("purchasedOn" in patch) columns.purchased_on = patch.purchasedOn;
     const { data, error } = await getSupabase().from("item_stock").update(columns).eq("id", id).select().abortSignal(signal);
     if (error) return { ok: false, reason: classify(error) };
     return data && data.length > 0 ? { ok: true, value: toItemStock(data[0]) } : { ok: false, reason: "not_found" };

@@ -1,36 +1,42 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { trackingDefaults, totalQuantity } from "@/modules/stock/items";
 import { LEVEL_SYMBOL } from "@/modules/stock/levels";
 import { formatQuantity, parseQuantity, stepQuantity } from "@/modules/stock/quantity";
+import { backHrefForEdit, parseItemEditQuery } from "@/modules/stock/routes";
+import { supplyGenres } from "@/modules/stock/supply";
 import type { Item, ItemStock, StockData, StockLevel } from "@/modules/stock/types";
-import { Field, GroupField, MSG_OFFLINE, NativeSelect, OfflineCard, QUANTITY_ERROR, QtyField, StateCard, loadStateBody, notify } from "./bits";
+import {
+  Field, GroupField, MSG_OFFLINE, NativeSelect, OfflineCard, QUANTITY_ERROR, QtyField, StateCard, SupplyGenreField, loadStateBody, notify,
+} from "./bits";
 import { Card } from "./card";
 import { Frame } from "./frame";
 import { useLookup } from "./lookup";
 import { useAfterDelay, useStock } from "./stock-provider";
 
-// 品物の編集(docs/design/stock/ の品物の編集 + docs/design/stock-master/)。カード4つ: 品物 / 管理のしかた / いつもの / 在庫(残量)。
+// 品物の編集(docs/design/stock/ の品物の編集 + docs/design/stock-master/ + docs/design/stock-supply/)。カード4つ: 品物 / 管理のしかた / いつもの / 在庫(残量)。
+// 日用品: 品物のカードにジャンル(入力欄 + 候補)と備考、在庫は数だけの 1 ブロック、残量に場所は無い。
 // 保存のボタンは無い(品物名はフォーカスが外れたとき、チップは押したとき)。管理のしかたを変えるときだけパネルの「変える」で確定する。
-// 開く品物は ?id=、来た元は &from=items(30_architecture.md D-18・M-11)。
+// 開く品物は ?id=、来た元は &from=stock|supply|items(30_architecture.md D-18・M-11・S-10。組み立てと読み取りは routes.ts)。
 
 export function ItemEditView() {
   const params = useSearchParams();
-  const id = params.get("id");
-  const from = params.get("from") === "items" ? "items" : "stock";
-  const back = from === "items" ? "/stock/items/" : "/stock/";
+  const query = parseItemEditQuery(params);
+  const { id, from } = query;
+  const back = backHrefForEdit(query);
   const { store, snapshot } = useStock();
   const { load, connection, data } = snapshot;
   const offline = connection === "offline";
   const showLoadingText = useAfterDelay(load === "loading", 1000);
   const [leaving, setLeaving] = useState(false);
-  const item = id ? data.items.find((i) => i.id === id && i.itemKind === "food") : undefined;
+  const item = id ? data.items.find((i) => i.id === id) : undefined;
 
   const stateBody = loadStateBody({ load, offline, showLoadingText, noun: "品物と在庫", onRetry: () => store.reload(), className: "mt-4" });
   let body: React.ReactNode;
@@ -41,14 +47,14 @@ export function ItemEditView() {
   } else if (!item) {
     body = (
       <StateCard title="品物がありません" className="mt-4">
-        {from === "items" ? "「‹ もどる」から、品物の一覧に戻ってください。" : "「‹ もどる」から、食材の一覧に戻ってください。"}
+        {from === "items" ? "「‹ もどる」から、品物の一覧に戻ってください。" : from === "supply" ? "「‹ もどる」から、日用品の一覧に戻ってください。" : "「‹ もどる」から、食材の一覧に戻ってください。"}
       </StateCard>
     );
   } else {
     body = <Editor key={item.id} item={item} data={data} offline={offline} back={back} onLeave={() => setLeaving(true)} />;
   }
   return (
-    <Frame back="list" backHref={back} title="品物の編集">
+    <Frame back="list" backHref={back} active={from} title="品物の編集">
       {body}
     </Frame>
   );
@@ -104,7 +110,12 @@ function Editor({ item, data, offline, back, onLeave }: { item: Item; data: Stoc
           </Card>
         </div>
         <section className="mt-6 md:col-start-2 md:row-span-2 md:row-start-1 md:mt-0">
-          {item.tracking === "count" ? (
+          {item.tracking === "count" && item.itemKind === "supply" ? (
+            <>
+              <h2 className="mb-3 text-lg font-heading">在庫</h2>
+              <SupplyBlock item={item} data={data} offline={offline} lookup={lookup} />
+            </>
+          ) : item.tracking === "count" ? (
             <>
               <h2 className="mb-3 text-lg font-heading">在庫</h2>
               <CountBlocks item={item} stocks={data.stocks.filter((s) => s.itemId === item.id)} offline={offline} lookup={lookup} />
@@ -137,7 +148,10 @@ function ItemCard({ item, data, offline, lookup }: { item: Item; data: StockData
   useEffect(() => {
     if (!focused.current) setDraft(item.name);
   }, [item.name]);
-  void data;
+  // 日用品のジャンル・備考も、保存された値(自分の保存・相手の変更)に追従する。相手の変更では候補も変わる(使われなくなった語は消える)
+  const [genreDraft, setGenreDraft] = useDraft(item.supplyGenre ?? "");
+  const [noteDraft, setNoteDraft] = useDraft(item.note ?? "");
+  const candidates = useMemo(() => supplyGenres(data), [data]);
   return (
     <Card as="section">
       <h2 className="sr-only">品物</h2>
@@ -168,17 +182,28 @@ function ItemCard({ item, data, offline, lookup }: { item: Item; data: StockData
       </Field>
       <div className="mt-4">
         <div className="text-base font-strong">種別</div>
-        <p className="text-base">食材</p>
+        <p className="text-base">{item.itemKind === "food" ? "食材" : "日用品"}</p>
       </div>
-      <Field label="ジャンル" htmlFor="edit-genre">
-        <NativeSelect id="edit-genre" value={item.genreId ?? ""} aria-disabled={offline || undefined} onChange={(e) => guard(() => store.setItemGenre(item.id, e.target.value))()}>
-          {lookup.genres.map((g) => (
-            <option key={g.id} value={g.id}>
-              {g.name}
-            </option>
-          ))}
-        </NativeSelect>
-      </Field>
+      {item.itemKind === "food" ? (
+        <Field label="ジャンル" htmlFor="edit-genre">
+          <NativeSelect id="edit-genre" value={item.genreId ?? ""} aria-disabled={offline || undefined} onChange={(e) => guard(() => store.setItemGenre(item.id, e.target.value))()}>
+            {lookup.genres.map((g) => (
+              <option key={g.id} value={g.id}>
+                {g.name}
+              </option>
+            ))}
+          </NativeSelect>
+        </Field>
+      ) : (
+        <SupplyGenreField
+          id="edit-genre"
+          value={genreDraft}
+          readOnly={offline}
+          candidates={candidates}
+          onChange={setGenreDraft}
+          onCommit={(g) => !offline && store.setItemSupplyGenre(item.id, g)}
+        />
+      )}
       {item.tracking === "count" && (
         <GroupField label="単位">
           <ToggleGroup aria-label="単位" value={item.unitId ? [item.unitId] : []} onValueChange={(v) => v[0] && guard(() => store.setItemUnit(item.id, v[0]))()}>
@@ -189,6 +214,17 @@ function ItemCard({ item, data, offline, lookup }: { item: Item; data: StockData
             ))}
           </ToggleGroup>
         </GroupField>
+      )}
+      {item.itemKind === "supply" && (
+        <Field label="備考" htmlFor="edit-note">
+          <Textarea
+            id="edit-note"
+            value={noteDraft}
+            readOnly={offline}
+            onChange={(e) => setNoteDraft(e.target.value)}
+            onBlur={() => !offline && store.setItemNote(item.id, noteDraft)}
+          />
+        </Field>
       )}
     </Card>
   );
@@ -301,6 +337,13 @@ function TrackingPanel({
       </div>
     </div>
   );
+}
+
+/** 保存された値に追従する下書き。保存された値が変わったら(自分の保存・相手の変更)下書きを捨てて、その値にそろえる */
+function useDraft(saved: string): [string, (v: string) => void] {
+  const [d, setD] = useState({ saved, text: saved });
+  if (d.saved !== saved) setD({ saved, text: saved });
+  return [d.saved === saved ? d.text : saved, (text) => setD({ saved, text })];
 }
 
 type Lookup = ReturnType<typeof useLookup>;
@@ -430,18 +473,65 @@ function LevelCard({ item, offline, lookup }: { item: Item; offline: boolean; lo
           ))}
         </ToggleGroup>
       </fieldset>
-      <GroupField label="場所">
-        <ToggleGroup
-          aria-label={`${item.name}の場所`}
-          value={item.locationId ? [item.locationId] : []}
-          onValueChange={(v) => v[0] && guard(() => store.setItemLocation(item.id, v[0]))()}
-        >
-          {lookup.locations.map((l) => (
-            <ToggleGroupItem key={l.id} value={l.id}>
-              {l.name}
-            </ToggleGroupItem>
-          ))}
-        </ToggleGroup>
+      {item.itemKind === "food" && (
+        <GroupField label="場所">
+          <ToggleGroup
+            aria-label={`${item.name}の場所`}
+            value={item.locationId ? [item.locationId] : []}
+            onValueChange={(v) => v[0] && guard(() => store.setItemLocation(item.id, v[0]))()}
+          >
+            {lookup.locations.map((l) => (
+              <ToggleGroupItem key={l.id} value={l.id}>
+                {l.name}
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
+        </GroupField>
+      )}
+    </Card>
+  );
+}
+
+// 数の日用品の在庫のブロック(品物に 1 つ。数と単位だけ。場所・期限・「使い切り」は無い。0 にすると「使い切りました」+「元に戻す」で、ブロックは「0」で残る。OD-stock-uiux-42 A)
+function SupplyBlock({ item, data, offline, lookup }: { item: Item; data: StockData; offline: boolean; lookup: Lookup }) {
+  const { store } = useStock();
+  const guard = guardOf(offline);
+  const total = totalQuantity(item.id, data);
+  const [draft, setDraft] = useState<{ text: string; error: string | null } | null>(null);
+  const shown = draft ?? { text: formatQuantity(total), error: null };
+  const withUndo = (handle: ReturnType<typeof store.setSupplyQuantity>) => {
+    if (handle) notify(handle.label, { label: "元に戻す", onClick: handle.undo });
+  };
+  const commit = () => {
+    if (!draft || offline) return;
+    const r = parseQuantity(draft.text, "non_negative");
+    if (!r.ok) return setDraft({ text: draft.text, error: QUANTITY_ERROR[r.error] });
+    setDraft(null);
+    if (r.value !== total) withUndo(store.setSupplyQuantity(item.id, r.value));
+  };
+  return (
+    <Card as="section">
+      <h3 className="text-lg font-strong break-words">{item.name}</h3>
+      <GroupField label="数">
+        <QtyField
+          id={`edit-stock-${item.id}`}
+          label={`${item.name}の数`}
+          value={shown.text}
+          unit={lookup.unitName(item)}
+          steppers={lookup.isCountable(item)}
+          readOnly={offline}
+          minusDisabled={total <= 0}
+          error={shown.error}
+          onChange={(text) => setDraft({ text, error: null })}
+          onBlur={commit}
+          onStep={(d) =>
+            guard(() => {
+              setDraft(null);
+              if (d === -1 && total <= 0) return;
+              withUndo(store.stepSupply(item.id, d));
+            })()
+          }
+        />
       </GroupField>
     </Card>
   );

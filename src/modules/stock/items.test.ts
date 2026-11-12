@@ -85,3 +85,25 @@ describe("planTrackingChange", () => {
     expect(planTrackingChange(mayo, { to: "count", unitId: "u-ko", quantity: 0 }, data([mayo]), ids, "2026-10-23").newStock).toBeNull();
   });
 });
+
+describe("日用品(stock-supply)", () => {
+  const wrap = item("wrap", "ラップ", { itemKind: "supply", genreId: null, locationId: null, unitId: "u-ko", isRegular: true }, 2);
+  const milk = item("milk", "牛乳", { isRegular: true }, 1);
+  const shampoo = item("shampoo", "シャンプー", {
+    itemKind: "supply", tracking: "level", stockLevel: "low", genreId: null, locationId: null, unitId: null, isRegular: true,
+  }, 3);
+
+  it("いつもの: 食材と日用品を混ぜて作った順。数の日用品は 0 もある", () => {
+    const rows = regularRows(data([shampoo, wrap, milk], [stock("w1", "wrap", 0, { locationId: null }), stock("m1", "milk", 2)]));
+    expect(rows.map((r) => r.item.id)).toEqual(["milk", "wrap", "shampoo"]);
+    expect(rows[1]).toMatchObject({ kind: "count", total: 0 });
+    expect(rows[2]).toMatchObject({ kind: "level", level: "low" });
+  });
+  it("残量 → 数: 日用品は個数 0 でも在庫を作り(場所なし)、食材は 0 なら作らない", () => {
+    const ids = { stockId: "s", householdId: "h1" };
+    const to = { to: "count", unitId: "u-ko", quantity: 0 } as const;
+    expect(planTrackingChange(shampoo, to, data([shampoo]), ids, "2026-10-23").newStock).toMatchObject({ quantity: 0, locationId: null, expiresOn: null });
+    const food = item("f", "豆腐", { tracking: "level", stockLevel: "full", unitId: null });
+    expect(planTrackingChange(food, to, data([food]), ids, "2026-10-23").newStock).toBeNull();
+  });
+});

@@ -1,24 +1,35 @@
 "use client";
 
+import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { LEVEL_SYMBOL } from "@/modules/stock/levels";
 import { formatQuantity, parseQuantity, stepQuantity } from "@/modules/stock/quantity";
 import {
   defaultLocationForGenre, prefillFromItem, validateRegistration, type RegistrationInput,
 } from "@/modules/stock/registration";
-import type { Item, StockLevel, Tracking } from "@/modules/stock/types";
-import { Field, GroupField, MSG_OFFLINE, NativeSelect, OfflineCard, QUANTITY_ERROR, QtyField, StateCard, RetryButton, notify } from "./bits";
+import { kindOfOrigin, parseOriginQuery, stockHref } from "@/modules/stock/routes";
+import { normalizeFreeText, supplyGenres } from "@/modules/stock/supply";
+import type { Item, ItemKind, StockLevel, Tracking } from "@/modules/stock/types";
+import {
+  Field, GroupField, MSG_OFFLINE, NativeSelect, OfflineCard, QUANTITY_ERROR, QtyField, StateCard, RetryButton, SupplyGenreField, notify,
+} from "./bits";
 import { Card } from "./card";
 import { Frame } from "./frame";
 import { useLookup } from "./lookup";
 import { useAfterDelay, useStock, useStockContext } from "./stock-provider";
 
-// 品物の登録(docs/design/stock/ の部分集合: 種別・補充の目安は出さない。docs/design/stock-food/brief.md Component Specs 1)。
+// 品物の登録(docs/design/stock/ + docs/design/stock-supply/: 種別「食材 / 日用品」は出す。補充の目安は出さない)。
 
 type Form = {
+  kind: ItemKind;
+  /** 日用品のジャンル(自由入力)と備考 */
+  supplyGenre: string;
+  note: string;
   name: string;
   picked: Item | null;
   tracking: Tracking;
@@ -33,12 +44,19 @@ type Form = {
 type Errors = { name?: string; genre?: string; unit?: string; qty?: string; tracking?: string };
 
 const TRACKING_LABEL: Record<Tracking, string> = { count: "数で管理", level: "残量で管理" };
-const emptyForm = (today: string): Form => ({
-  name: "", picked: null, tracking: "count", qty: "1", unitId: "", level: "full", genreId: "", locationId: "", purchased: today, expires: "",
+const KIND_LABEL: Record<ItemKind, string> = { food: "食材", supply: "日用品" };
+/** 管理のしかたの初期値(食材 = 数、日用品 = 残量。OD-stock-uiux-15 A) */
+const defaultTracking = (kind: ItemKind): Tracking => (kind === "food" ? "count" : "level");
+const emptyForm = (today: string, kind: ItemKind = "food"): Form => ({
+  kind, supplyGenre: "", note: "",
+  name: "", picked: null, tracking: defaultTracking(kind), qty: "1", unitId: "", level: "full", genreId: "", locationId: "", purchased: today, expires: "",
 });
 
 function formFromInput(input: RegistrationInput): Form {
   return {
+    kind: input.kind,
+    supplyGenre: input.supplyGenre ?? "",
+    note: input.note ?? "",
     name: input.name,
     picked: null,
     tracking: input.tracking,
@@ -53,6 +71,7 @@ function formFromInput(input: RegistrationInput): Form {
 }
 
 export function ItemNewView() {
+  const { from } = parseOriginQuery(useSearchParams());
   const { store, snapshot } = useStock();
   const { refill, consumeRefill, requestRefill } = useStockContext();
   const { load, connection, data, today } = snapshot;
@@ -60,7 +79,7 @@ export function ItemNewView() {
   const lookup = useLookup(data);
   const showLoadingText = useAfterDelay(load === "loading", 1000);
 
-  const [form, setForm] = useState<Form>(() => emptyForm(today));
+  const [form, setForm] = useState<Form>(() => emptyForm(today, kindOfOrigin(from)));
   // 候補の絞り込みに使う値。変換中(IME)は更新せず、確定してから更新する(OD-stock-food-10 A)
   const [query, setQuery] = useState("");
   const [errors, setErrors] = useState<Errors>({});
@@ -83,14 +102,16 @@ export function ItemNewView() {
   const matches = useMemo(() => {
     const q = query.trim();
     if (q === "" || form.picked) return [];
-    return data.items.filter((i) => i.itemKind === "food" && i.name.includes(q)).slice(0, 4);
+    return data.items.filter((i) => i.name.includes(q)).slice(0, 4);
   }, [query, form.picked, data.items]);
   const showCandidates = query.trim() !== "" && !form.picked;
 
   const pick = (item: Item) => {
     const p = prefillFromItem(item, data, form.purchased);
     setForm({
-      ...emptyForm(today),
+      ...emptyForm(today, item.itemKind),
+      supplyGenre: p.supplyGenre ?? "",
+      note: p.note ?? "",
       name: item.name,
       picked: item,
       tracking: p.tracking,
@@ -108,16 +129,20 @@ export function ItemNewView() {
 
   const toInput = (): RegistrationInput => {
     const q = parseQuantity(form.qty, "positive");
+    const supply = form.kind === "supply";
     return {
+      kind: form.kind,
+      supplyGenre: supply ? normalizeFreeText(form.supplyGenre) : null,
+      note: supply ? normalizeFreeText(form.note) : null,
       name: form.name.trim(),
       tracking: form.tracking,
-      genreId: form.genreId || null,
+      genreId: supply ? null : form.genreId || null,
       unitId: form.tracking === "count" ? form.unitId || null : null,
       quantity: form.tracking === "count" && q.ok ? q.value : null,
       stockLevel: form.level,
-      locationId: form.locationId || null,
+      locationId: supply ? null : form.locationId || null,
       purchasedOn: form.purchased,
-      expiresOn: form.tracking === "count" ? form.expires || null : null,
+      expiresOn: !supply && form.tracking === "count" ? form.expires || null : null,
     };
   };
 
@@ -127,6 +152,10 @@ export function ItemNewView() {
     if (input.name === "") e.name = "品物名を入れてください";
     else {
       const mismatch = validateRegistration(input, data);
+      if (mismatch?.error === "kind_mismatch") {
+        e.name = `「${mismatch.itemName}」は${KIND_LABEL[mismatch.currentKind]}にあります。候補から選んでください。`;
+        return e;
+      }
       if (mismatch?.error === "tracking_mismatch") {
         const label = TRACKING_LABEL[mismatch.currentTracking];
         e.tracking = `${mismatch.itemName}は「${label}」の品物です。「${label}」を選んでください。`;
@@ -138,7 +167,7 @@ export function ItemNewView() {
         return e;
       }
     }
-    if (form.genreId === "") e.genre = "ジャンルを選んでください";
+    if (form.kind === "food" && form.genreId === "") e.genre = "ジャンルを選んでください";
     if (form.tracking === "count") {
       const q = parseQuantity(form.qty, "positive");
       if (!q.ok) e.qty = QUANTITY_ERROR[q.error];
@@ -174,7 +203,7 @@ export function ItemNewView() {
     }
     const input = toInput();
     notify(`${input.name}を登録しました`);
-    setForm(emptyForm(today));
+    setForm(emptyForm(today, form.kind));
     setQuery("");
     // 保存を待たずに欄を戻す。失敗したら入力を返して「入れ直す」(6秒)
     void store.register(input).then((r) => {
@@ -186,6 +215,7 @@ export function ItemNewView() {
     });
   };
 
+  const supplyCandidates = useMemo(() => supplyGenres(data), [data]);
   const countable = form.unitId === "" || (data.units.find((u) => u.id === form.unitId)?.isCountable ?? true);
   const unitName = data.units.find((u) => u.id === form.unitId)?.name ?? "";
   const step = (delta: 1 | -1) => {
@@ -194,9 +224,10 @@ export function ItemNewView() {
     set({ qty: formatQuantity(stepQuantity(q.value, delta, "form")) });
   };
 
+  const frame = { back: "list", backHref: stockHref(from), active: from, title: "品物の登録" } as const;
   if (load !== "ready") {
     return (
-      <Frame back="list" title="品物の登録">
+      <Frame {...frame}>
         {load === "loading" ? (
           showLoadingText && (
             <StateCard role="status" className="mt-4 md:w-[calc(50%-0.5rem)]">
@@ -218,8 +249,7 @@ export function ItemNewView() {
 
   return (
     <Frame
-      back="list"
-      title="品物の登録"
+      {...frame}
       barAllSizes
       bar={
         <Button type="submit" form="item-new-form" className="w-full">
@@ -229,7 +259,27 @@ export function ItemNewView() {
     >
       {offline && <OfflineCard className="mt-4" />}
       <form id="item-new-form" onSubmit={submit} noValidate className="mt-4 md:grid md:grid-cols-2 md:items-start md:gap-x-6">
-        <div>
+        <div className="md:col-span-2">
+          <ToggleGroup
+            joined
+            aria-label="品物の種類"
+            value={[form.kind]}
+            onValueChange={(v) => {
+              if ((v[0] === "food" || v[0] === "supply") && v[0] !== form.kind) {
+                // 種別を変えると、管理のしかたは種別の既定に戻り、ジャンル・場所・期限が空に戻る(OD-stock-uiux-50 (5))
+                set({
+                  kind: v[0], tracking: defaultTracking(v[0]), genreId: "", locationId: "", expires: "", supplyGenre: "", note: "", picked: null,
+                });
+                setErrors({});
+              }
+            }}
+          >
+            <ToggleGroupItem value="food">食材</ToggleGroupItem>
+            <ToggleGroupItem value="supply">日用品</ToggleGroupItem>
+          </ToggleGroup>
+        </div>
+
+        <div className="mt-4">
           <Field label="品物名" htmlFor="item-new-name" error={errors.name} errorId="item-new-name-err">
             <Input
               ref={nameRef}
@@ -269,10 +319,11 @@ export function ItemNewView() {
                     <li key={c.id} className="border-t border-border first:border-t-0">
                       <button
                         type="button"
-                        className="flex min-h-12 w-full items-center px-4 text-left text-lg font-strong text-foreground outline-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring active:bg-accent"
+                        className="flex min-h-12 w-full items-center justify-between gap-3 px-4 text-left text-lg font-strong text-foreground outline-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring active:bg-accent"
                         onClick={() => pick(c)}
                       >
-                        {c.name}
+                        <span className="min-w-0 break-words">{c.name}</span>
+                        {c.itemKind !== form.kind && <Badge variant="muted">{KIND_LABEL[c.itemKind]}</Badge>}
                       </button>
                     </li>
                   ))}
@@ -357,46 +408,52 @@ export function ItemNewView() {
           )}
         </div>
 
-        <div className="mt-4 md:mt-0">
-          <Field label="ジャンル" htmlFor="item-new-genre" error={errors.genre} errorId="item-new-genre-err">
-            <NativeSelect
-              id="item-new-genre"
-              value={form.genreId}
-              aria-invalid={errors.genre ? true : undefined}
-              aria-describedby={errors.genre ? "item-new-genre-err" : undefined}
-              onChange={(e) => {
-                const genreId = e.target.value;
-                set({
-                  genreId,
-                  // 候補を選んだあとは、場所を変えない。そうでなければジャンルの既定の場所
-                  locationId: form.picked ? form.locationId : (genreId ? (defaultLocationForGenre(genreId, data) ?? "") : ""),
-                });
-                setErrors((x) => ({ ...x, genre: undefined }));
-              }}
-            >
-              <option value="">選んでください</option>
-              {lookup.genres.map((g) => (
-                <option key={g.id} value={g.id}>
-                  {g.name}
-                </option>
-              ))}
-            </NativeSelect>
-          </Field>
-          <div className="mt-4">
-            <GroupField label="場所">
-              <ToggleGroup aria-label="場所" value={form.locationId ? [form.locationId] : []} onValueChange={(v) => v[0] && set({ locationId: v[0] })}>
-                {lookup.locations.map((l) => (
-                  <ToggleGroupItem key={l.id} value={l.id}>
-                    {l.name}
-                  </ToggleGroupItem>
+        <div className="mt-4">
+          {form.kind === "food" ? (
+            <Field label="ジャンル" htmlFor="item-new-genre" error={errors.genre} errorId="item-new-genre-err">
+              <NativeSelect
+                id="item-new-genre"
+                value={form.genreId}
+                aria-invalid={errors.genre ? true : undefined}
+                aria-describedby={errors.genre ? "item-new-genre-err" : undefined}
+                onChange={(e) => {
+                  const genreId = e.target.value;
+                  set({
+                    genreId,
+                    // 候補を選んだあとは、場所を変えない。そうでなければジャンルの既定の場所
+                    locationId: form.picked ? form.locationId : (genreId ? (defaultLocationForGenre(genreId, data) ?? "") : ""),
+                  });
+                  setErrors((x) => ({ ...x, genre: undefined }));
+                }}
+              >
+                <option value="">選んでください</option>
+                {lookup.genres.map((g) => (
+                  <option key={g.id} value={g.id}>
+                    {g.name}
+                  </option>
                 ))}
-              </ToggleGroup>
-            </GroupField>
-          </div>
+              </NativeSelect>
+            </Field>
+          ) : (
+            <SupplyGenreField id="item-new-genre" value={form.supplyGenre} onChange={(supplyGenre) => set({ supplyGenre })} candidates={supplyCandidates} />
+          )}
+          {form.kind === "food" && (
+            <div className="mt-4">
+              <GroupField label="場所">
+                <ToggleGroup aria-label="場所" value={form.locationId ? [form.locationId] : []} onValueChange={(v) => v[0] && set({ locationId: v[0] })}>
+                  {lookup.locations.map((l) => (
+                    <ToggleGroupItem key={l.id} value={l.id}>
+                      {l.name}
+                    </ToggleGroupItem>
+                  ))}
+                </ToggleGroup>
+              </GroupField>
+            </div>
+          )}
           <Field label="購入日" htmlFor="item-new-purchased">
             <Input id="item-new-purchased" type="date" value={form.purchased} onChange={(e) => set({ purchased: e.target.value })} />
           </Field>
-          {form.tracking === "count" && (
+          {form.kind === "food" && form.tracking === "count" && (
             <Field label="期限" htmlFor="item-new-expires">
               <div className="flex items-center gap-2">
                 <Input id="item-new-expires" type="date" value={form.expires} onChange={(e) => set({ expires: e.target.value })} />
@@ -404,6 +461,11 @@ export function ItemNewView() {
                   クリア
                 </Button>
               </div>
+            </Field>
+          )}
+          {form.kind === "supply" && (
+            <Field label="備考" htmlFor="item-new-note">
+              <Textarea id="item-new-note" value={form.note} onChange={(e) => set({ note: e.target.value })} />
             </Field>
           )}
         </div>

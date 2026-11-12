@@ -1,5 +1,6 @@
 "use client";
 
+import { useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -8,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Toggle } from "@/components/ui/toggle";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { isMasterInUse, sortMasters } from "@/modules/stock/masters";
+import { parseOriginQuery, stockHref } from "@/modules/stock/routes";
 import type { Genre, Location, MasterKind, StockData, Unit } from "@/modules/stock/types";
 import { MSG_OFFLINE, OfflineCard, loadStateBody, notify } from "./bits";
 import { Card } from "./card";
@@ -30,6 +32,8 @@ type Guard = (fn: () => void) => () => void;
 export function MastersView() {
   const { store, snapshot } = useStock();
   const { load, connection, data } = snapshot;
+  const { from } = parseOriginQuery(useSearchParams());
+  const frame = { back: "list", backHref: stockHref(from), active: "masters", title: "マスタ" } as const;
   const offline = connection === "offline";
   const [editing, setEditing] = useState<Editing>(null);
   const showLoadingText = useAfterDelay(load === "loading", 1000);
@@ -38,7 +42,7 @@ export function MastersView() {
   const stateBody = loadStateBody({
     load, offline, showLoadingText, noun: "マスタ", onRetry: () => store.reload(), className: "mt-4 md:w-[calc(50%-0.5rem)]",
   });
-  if (stateBody !== null) return <Frame back="list" title="マスタ">{stateBody}</Frame>;
+  if (stateBody !== null) return <Frame {...frame}>{stateBody}</Frame>;
 
   const remove = (kind: MasterKind, id: string) => {
     const result = store.deleteMaster(kind, id);
@@ -51,7 +55,7 @@ export function MastersView() {
   };
 
   return (
-    <Frame back="list" title="マスタ">
+    <Frame {...frame}>
       {offline && <OfflineCard subject="マスタ" className="mt-4" />}
       <div className="mt-4 md:columns-2 md:gap-4">
         {KINDS.map((kind) => (

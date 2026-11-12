@@ -1,7 +1,7 @@
 import { expect, test, type Page, type TestInfo } from "@playwright/test";
 import { findBottomOverlap, findHorizontalOverflow, findSmallInputs, findSmallTapTargets } from "./checks";
 import { sql } from "./db";
-import { openStock, resetMasters, seedStock, setRegular, shotPath, stockHousehold } from "./stock-helpers";
+import { openStock, resetMasters, seedStock, setRegular, shootScreen, stockHousehold } from "./stock-helpers";
 
 // 倉庫 run 2(stock-master)の画面ごとのスクリーンショットと検査(30_architecture.md Interfaces §10)。承認済みのモックの状態(docs/design/stock-master/)ごとに撮る。
 // 出力先は E2E_SCREENSHOT_DIR/<プロジェクト名>/。時計は 2026-10-23(金)正午に固定。世帯は project ごとの MS-<project>(M-13)。
@@ -271,7 +271,7 @@ for (const shot of shots) {
     }
     await shot.prepare(page, info, household);
     await page.waitForTimeout(500); // 通知の出入りと描画が落ち着くまで
-    await page.screenshot({ path: shotPath(info, shot.name), fullPage: !!shot.full });
+    await shootScreen(page, info, shot.name, !!shot.full);
     expect(await findHorizontalOverflow(page)).toBeNull();
     expect(await findSmallInputs(page)).toEqual([]);
     expect(await findSmallTapTargets(page)).toEqual([]);

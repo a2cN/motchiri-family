@@ -1,26 +1,37 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Toggle } from "@/components/ui/toggle";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { groupItemsByGenre } from "@/modules/stock/items";
+import { itemEditHref, itemsHref, parseItemsQuery, stockHref } from "@/modules/stock/routes";
+import { groupSupplyItemsByGenre } from "@/modules/stock/supply";
 import { MSG_OFFLINE, OfflineCard, StateCard, loadStateBody, notify } from "./bits";
 import { Card } from "./card";
 import { Frame } from "./frame";
 import { useAfterDelay, useStock } from "./stock-provider";
 
-// 品物の一覧(docs/design/stock/ の「品物の一覧」の run 2 の部分集合: 食材だけ、補充の目安なし。docs/design/stock-master/)。
+// 品物の一覧(docs/design/stock/ の「品物の一覧」+ docs/design/stock-supply/: 「食材 / 日用品」の切り替えと右の件数、補充の目安なし)。
+// 来た元(from)と見ている種別(kind)は URL のクエリで持つ(30 S-10)。切り替えは履歴を増やさない。
 export function ItemsView() {
   const { store, snapshot } = useStock();
+  const router = useRouter();
+  const { from, kind } = parseItemsQuery(useSearchParams());
   const { load, connection, data } = snapshot;
   const offline = connection === "offline";
-  const groups = useMemo(() => groupItemsByGenre(data), [data]);
+  const groups =
+    kind === "food"
+      ? groupItemsByGenre(data).map((g) => ({ key: g.genreId, label: g.label, items: g.items }))
+      : groupSupplyItemsByGenre(data).map((g) => ({ key: g.genre ?? "", label: g.genre ?? "ジャンルなし", items: g.items }));
+  const total = groups.reduce((a, g) => a + g.items.length, 0);
+  const frame = { back: "list", backHref: stockHref(from), active: "items", title: "品物の一覧" } as const;
   const showLoadingText = useAfterDelay(load === "loading", 1000);
   const guard = (fn: () => void) => () => (offline ? notify(MSG_OFFLINE) : fn());
 
   const stateBody = loadStateBody({ load, offline, showLoadingText, noun: "品物", onRetry: () => store.reload(), className: "mt-4 md:w-[calc(50%-0.5rem)]" });
-  if (stateBody !== null) return <Frame back="list" title="品物の一覧">{stateBody}</Frame>;
+  if (stateBody !== null) return <Frame {...frame}>{stateBody}</Frame>;
 
   const remove = (itemId: string) => {
     const handle = store.deleteItem(itemId);
@@ -28,8 +39,24 @@ export function ItemsView() {
   };
 
   return (
-    <Frame back="list" title="品物の一覧">
+    <Frame {...frame}>
       {offline && <OfflineCard subject="品物" className="mt-4" />}
+      <div className="mt-3 flex items-center justify-between gap-3">
+        <ToggleGroup
+          joined
+          aria-label="品物の種別"
+          value={[kind]}
+          onValueChange={(v) => {
+            if (v[0] === "food" || v[0] === "supply") router.replace(itemsHref({ from, kind: v[0] }));
+          }}
+        >
+          <ToggleGroupItem value="food">食材</ToggleGroupItem>
+          <ToggleGroupItem value="supply">日用品</ToggleGroupItem>
+        </ToggleGroup>
+        <span className="text-base text-muted-foreground" aria-live="polite">
+          {total}件
+        </span>
+      </div>
       {groups.length === 0 ? (
         <StateCard title="品物はありません" className="mt-4">
           「品物の登録」から追加できます。
@@ -37,7 +64,7 @@ export function ItemsView() {
       ) : (
         <div className="mt-4 md:columns-2 md:gap-4">
           {groups.map((g) => (
-            <Card as="section" key={g.genreId} className="mb-4 break-inside-avoid">
+            <Card as="section" key={g.key || "none"} className="mb-4 break-inside-avoid">
               <div className="flex items-baseline justify-between gap-3">
                 <h2 className="text-lg font-heading">{g.label}</h2>
                 <span className="text-base text-muted-foreground">{g.items.length}件</span>
@@ -46,7 +73,7 @@ export function ItemsView() {
                 {g.items.map((item) => (
                   <li key={item.id} className="flex min-h-16 items-center justify-between gap-2 border-t border-border first:border-t-0">
                     <Link
-                      href={`/stock/item-edit/?id=${item.id}&from=items`}
+                      href={itemEditHref({ id: item.id, from: "items", items: { from, kind } })}
                       aria-label={`${item.name}を編集`}
                       className="block min-h-16 min-w-0 flex-1 py-2 text-foreground no-underline active:bg-accent"
                     >

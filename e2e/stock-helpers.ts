@@ -10,15 +10,18 @@ export const FIXED_NOW = new Date("2026-10-23T12:00:00+09:00"); // 金曜。期�
 
 /**
  * suite: "main"(stock.spec.ts。S1・S2)、"shots"(stock-screens.spec.ts。別の世帯。同じ世帯を2つのワーカーが同時に触らないため)、
- * "master"(stock-master.spec.ts。M1・M2。マスタを変える)、"mshots"(stock-master-screens.spec.ts)
+ * "master"(stock-master.spec.ts。M1・M2。マスタを変える)、"mshots"(stock-master-screens.spec.ts)、
+ * "supply"(stock-supply.spec.ts。D1・D2)、"sshots"(stock-supply-screens.spec.ts。DS)
  */
-export type Suite = "main" | "shots" | "master" | "mshots";
+export type Suite = "main" | "shots" | "master" | "mshots" | "supply" | "sshots";
 
 const SUITE_KEYS: Record<Suite, { household: string; email: (n: 1 | 2) => string }> = {
   main: { household: "HOUSEHOLD_ID", email: (n) => `S${n}_EMAIL` },
   shots: { household: "SHOTS_HOUSEHOLD_ID", email: () => "SH_EMAIL" },
   master: { household: "MASTER_HOUSEHOLD_ID", email: (n) => `M${n}_EMAIL` },
   mshots: { household: "MSHOTS_HOUSEHOLD_ID", email: () => "MS_EMAIL" },
+  supply: { household: "SUPPLY_HOUSEHOLD_ID", email: (n) => `D${n}_EMAIL` },
+  sshots: { household: "SSHOTS_HOUSEHOLD_ID", email: () => "DS_EMAIL" },
 };
 
 export function stockWho(info: TestInfo, n: 1 | 2, suite: Suite = "main") {
@@ -124,12 +127,55 @@ export function seedStock(household: string, items: Seed[] = SEED_ITEMS, stocks:
   `);
 }
 
+type SupplySeed = { name: string; tracking: "count" | "level"; unit: string; genre: string | null; note: string | null; level?: string; quantity?: number };
+
+// 承認済みモックの日用品の架空のデータ(docs/design/stock-supply/ の画像と同じ。登録順)
+export const SEED_SUPPLIES: SupplySeed[] = [
+  { name: "トイレットペーパー", tracking: "level", unit: "", genre: "紙類", note: "12ロール", level: "full" },
+  { name: "食器用洗剤", tracking: "level", unit: "", genre: "洗剤", note: null, level: "low" },
+  { name: "ティッシュペーパー", tracking: "level", unit: "", genre: "紙類", note: null, level: "out" },
+  { name: "ゴミ袋", tracking: "level", unit: "", genre: "キッチン", note: "45L", level: "full" },
+  { name: "シャンプーの詰め替え", tracking: "count", unit: "本", genre: "お風呂", note: null, quantity: 1 },
+  { name: "ボディソープの詰め替え", tracking: "count", unit: "本", genre: "お風呂", note: null, quantity: 0 },
+  { name: "洗濯用洗剤", tracking: "count", unit: "本", genre: "洗剤", note: null, quantity: 2 },
+  { name: "歯みがき粉", tracking: "level", unit: "", genre: "洗面所", note: null, level: "full" },
+  { name: "ハンドソープ", tracking: "level", unit: "", genre: null, note: null, level: "full" },
+];
+
+/** 日用品を入れる(1文。作った順は並びの順。数の日用品は在庫を品物に 1 つ、0 でも作る。食材より後に作った時刻) */
+export function seedSupplies(household: string, supplies: SupplySeed[] = SEED_SUPPLIES) {
+  const values = supplies
+    .map((i, n) => `(${q(i.name)}, ${q(i.tracking)}, ${q(i.unit)}, ${q(i.genre)}, ${q(i.note)}, ${q(i.level)}, ${i.quantity ?? "null::numeric"}, ${n})`)
+    .join(",\n");
+  sql(`
+    with src (name, tracking, unit, genre, note, lvl, qty, n) as (values ${values}),
+    ins as (
+      insert into public.item (household_id, name, item_kind, tracking, unit_id, supply_genre, note, stock_level, restock_at_level, created_at)
+      select '${household}', s.name, 'supply', s.tracking, u.id, s.genre, s.note, s.lvl, case when s.tracking = 'level' then 'low' end,
+             timestamptz '2026-10-02 00:00:00+09' + s.n * interval '1 second'
+      from src as s left join public.unit as u on u.household_id = '${household}' and u.name = s.unit
+      returning id, name
+    )
+    insert into public.item_stock (household_id, item_id, quantity, location_id, purchased_on, expires_on, created_at)
+    select '${household}', ins.id, src.qty, null, date '2026-10-20', null, timestamptz '2026-10-02 00:00:00+09' + src.n * interval '1 second'
+    from src join ins on ins.name = src.name where src.tracking = 'count'
+  `);
+}
+
 /** 固定した時刻で、S1 としてログインし、倉庫の一覧を開く */
 export async function openStock(page: Page, info: TestInfo, who: 1 | 2 = 1, suite: Suite = "main") {
   await page.clock.setFixedTime(FIXED_NOW);
   await loginWith(page, stockWho(info, who, suite));
   await page.goto("stock/");
   await expect(page.locator("h1")).toHaveText("もっちり倉庫");
+}
+
+/** 固定した時刻でログインし、日用品の画面を開く */
+export async function openSupply(page: Page, info: TestInfo, who: 1 | 2 = 1, suite: Suite = "supply") {
+  await page.clock.setFixedTime(FIXED_NOW);
+  await loginWith(page, stockWho(info, who, suite));
+  await page.goto("stock/supply/");
+  await expect(page.locator("h1")).toHaveText("日用品");
 }
 
 export function shotPath(info: TestInfo, name: string): string {
@@ -146,4 +192,30 @@ export function row(page: Page, name: string) {
 /** 一覧の行から数量の表示(「3パック」など)を読む */
 export async function rowQuantityText(page: Page, name: string): Promise<string> {
   return (await row(page, name).first().locator("span.tabular-nums").first().innerText()).trim();
+}
+
+/**
+ * 画面を撮る。full のときは、ページ全体(fullPage)ではなく、スクロールしながら画面(viewport)の画像を何枚か撮る
+ * (下に固定の帯とタブがあるので、fullPage だと画面の中ほどに描かれてしまう)。名前は <name>-1.png、<name>-2.png、…。
+ * 帯とタブの高さぶんは重ねて、行が途切れないようにする。
+ */
+export async function shootScreen(page: Page, info: TestInfo, name: string, full: boolean): Promise<void> {
+  if (!full) {
+    await page.screenshot({ path: shotPath(info, name) });
+    return;
+  }
+  const { vh, sh, stack } = await page.evaluate(() => ({
+    vh: window.innerHeight,
+    sh: document.documentElement.scrollHeight,
+    stack: document.querySelector("[data-bottom-stack]")?.getBoundingClientRect().height ?? 0,
+  }));
+  const step = Math.max(200, vh - stack - 24);
+  const ys = [0];
+  while (ys.length < 8 && ys[ys.length - 1] + vh < sh) ys.push(Math.min(ys[ys.length - 1] + step, sh - vh));
+  for (const [n, y] of ys.entries()) {
+    await page.evaluate((top) => window.scrollTo(0, top), y);
+    await page.waitForTimeout(150);
+    await page.screenshot({ path: shotPath(info, `${name}-${n + 1}`) });
+  }
+  await page.evaluate(() => window.scrollTo(0, 0));
 }

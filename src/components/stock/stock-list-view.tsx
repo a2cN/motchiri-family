@@ -8,6 +8,7 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { expiryStatus, formatDay } from "@/modules/stock/dates";
 import { groupFoodStock } from "@/modules/stock/grouping";
 import { regularRows, type RegularRow } from "@/modules/stock/items";
+import { itemEditHref, itemNewHref } from "@/modules/stock/routes";
 import { LEVEL_SYMBOL, LEVEL_VARIANT, NEXT_LEVEL } from "@/modules/stock/levels";
 import { formatQuantity } from "@/modules/stock/quantity";
 import type { Item, ItemStock } from "@/modules/stock/types";
@@ -26,7 +27,7 @@ const TITLE = "もっちり倉庫";
 
 function NewItemLink({ className }: { className?: string }) {
   return (
-    <Link href="/stock/item-new/" className={cn(buttonVariants(), className)}>
+    <Link href={itemNewHref({ from: "stock" })} className={cn(buttonVariants(), className)}>
       <span aria-hidden="true">＋</span>品物の登録
     </Link>
   );
@@ -47,9 +48,10 @@ export function StockListView() {
     if (handle) notify(handle.label, { label: "元に戻す", onClick: handle.undo });
   };
 
+  const frame = { back: "top", level: "top", active: "stock", title: TITLE } as const;
   if (load === "loading") {
     return (
-      <Frame back="top" title={TITLE}>
+      <Frame {...frame}>
         {showLoadingText && (
           <StateCard role="status" className="mt-4 md:w-[calc(50%-0.5rem)]">
             読み込んでいます…
@@ -60,7 +62,7 @@ export function StockListView() {
   }
   if (load === "error") {
     return (
-      <Frame back="top" title={TITLE}>
+      <Frame {...frame}>
         {offline ? (
           <StateCard title="電波がありません" className="mt-4 md:w-[calc(50%-0.5rem)]" action={<RetryButton onClick={() => store.reload()} />}>
             在庫を読み込むには電波が要ります。電波のある所で、もう一度お試しください。
@@ -75,7 +77,7 @@ export function StockListView() {
   }
 
   return (
-    <Frame back="top" nav title={TITLE} headerRight={<NewItemLink className="hidden md:inline-flex" />} bar={<NewItemLink className="w-full" />}>
+    <Frame {...frame} headerNav="stock" headerRight={<NewItemLink className="hidden md:inline-flex" />} bar={<NewItemLink className="w-full" />}>
       {offline && <OfflineCard className="mt-4" />}
       <div className="mt-4">
         <ToggleGroup
@@ -149,7 +151,7 @@ function CountRow({
   const qty = `${formatQuantity(stock.quantity)}${unit}`;
   return (
     <li className={ROW}>
-      <Link href={`/stock/item-edit/?id=${item.id}`} aria-label={`${item.name}を編集`} className={LINK}>
+      <Link href={itemEditHref({ id: item.id, from: "stock" })} aria-label={`${item.name}を編集`} className={LINK}>
         <div className="text-lg font-strong break-words">{item.name}</div>
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-base text-muted-foreground">
           <span>{stock.expiresOn ? `期限 ${formatDay(stock.expiresOn, today)}` : "期限なし"}</span>
@@ -178,7 +180,7 @@ function LevelRow({ item, onCycle }: { item: Item; onCycle: () => void }) {
   const level = item.stockLevel ?? "full";
   return (
     <li className={ROW}>
-      <Link href={`/stock/item-edit/?id=${item.id}`} aria-label={`${item.name}を編集`} className={LINK}>
+      <Link href={itemEditHref({ id: item.id, from: "stock" })} aria-label={`${item.name}を編集`} className={LINK}>
         <div className="text-lg font-strong break-words">{item.name}</div>
         <div className="text-base text-muted-foreground">残量で管理</div>
       </Link>
@@ -199,7 +201,7 @@ function LevelRow({ item, onCycle }: { item: Item; onCycle: () => void }) {
 function RegularListRow({ row, unit }: { row: RegularRow; unit: string }) {
   return (
     <li className={ROW}>
-      <Link href={`/stock/item-edit/?id=${row.item.id}`} aria-label={`${row.item.name}を編集`} className={LINK}>
+      <Link href={itemEditHref({ id: row.item.id, from: "stock" })} aria-label={`${row.item.name}を編集`} className={LINK}>
         <div className="flex min-h-12 items-center text-lg font-strong break-words">{row.item.name}</div>
       </Link>
       {row.kind === "level" ? (

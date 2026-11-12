@@ -121,6 +121,8 @@ test("登録: 新しい品物(手数は ①名前 ②ジャンルと単位 ③�
   await page.getByLabel("品物名").fill("トマト");
   await page.getByLabel("ジャンル").selectOption({ label: "野菜・果物" });
   await expect(chip(page, "場所", "冷蔵庫")).toHaveAttribute("aria-pressed", "true"); // ジャンルの既定の場所
+  // 種別の切り替えが増えて、小さい画面では単位が下の帯の裏に入る。中央へスクロールしてから押す
+  await chip(page, "単位", "個").evaluate((el) => el.scrollIntoView({ block: "center" }));
   await chip(page, "単位", "個").click();
   await page.getByLabel("期限").fill("2026-10-30");
   await page.getByRole("button", { name: "登録する" }).click();
@@ -168,6 +170,8 @@ test("登録の誤り: 空のまま登録、個数、既存の品物の単位・
   await expect(page.getByLabel("品物名")).toHaveAttribute("aria-invalid", "true");
   await page.getByLabel("品物名").fill("みかん");
   await page.getByLabel("ジャンル").selectOption({ label: "野菜・果物" });
+  // 種別の切り替えが増えて、小さい画面では単位が下の帯の裏に入る。中央へスクロールしてから押す
+  await chip(page, "単位", "個").evaluate((el) => el.scrollIntoView({ block: "center" }));
   await chip(page, "単位", "個").click();
   for (const [text, message] of [["", "個数を入れてください"], ["abc", "数を入れてください"], ["1.25", "小数は第一位までです"], ["0", "0 より大きい数を入れてください"]] as const) {
     await page.locator("#item-new-qty").fill(text);
@@ -264,6 +268,7 @@ test("2人の反映: 片方の ±・使い切り・元に戻す・登録・残�
   await page.getByRole("link", { name: "品物の登録" }).first().click();
   await page.getByLabel("品物名").fill("バナナ");
   await page.getByLabel("ジャンル").selectOption({ label: "野菜・果物" });
+  await chip(page, "単位", "本").evaluate((el) => el.scrollIntoView({ block: "center" })); // 小さい画面では下の帯の裏に入る
   await chip(page, "単位", "本").click();
   await page.getByRole("button", { name: "登録する" }).click();
   await expect(page.getByText("バナナを登録しました")).toBeVisible();

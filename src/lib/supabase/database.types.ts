@@ -47,14 +47,14 @@ isOneToOne: false
                   ]
                 },"item": {
                   Row: {
-                    "created_at": string,"genre_id": string | null,"household_id": string,"id": string,"is_regular": boolean,"item_kind": string,"last_expiry_days": number | null,"location_id": string | null,"name": string,"restock_at_count": number | null,"restock_at_level": string | null,"stock_level": string | null,"tracking": string,"unit_id": string | null,"updated_at": string
+                    "created_at": string,"genre_id": string | null,"household_id": string,"id": string,"is_regular": boolean,"item_kind": string,"last_expiry_days": number | null,"location_id": string | null,"name": string,"note": string | null,"restock_at_count": number | null,"restock_at_level": string | null,"stock_level": string | null,"supply_genre": string | null,"tracking": string,"unit_id": string | null,"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "created_at"?: string,"genre_id"?: string | null,"household_id": string,"id"?: string,"is_regular"?: boolean,"item_kind": string,"last_expiry_days"?: number | null,"location_id"?: string | null,"name": string,"restock_at_count"?: number | null,"restock_at_level"?: string | null,"stock_level"?: string | null,"tracking": string,"unit_id"?: string | null,"updated_at"?: string
+                    "created_at"?: string,"genre_id"?: string | null,"household_id": string,"id"?: string,"is_regular"?: boolean,"item_kind": string,"last_expiry_days"?: number | null,"location_id"?: string | null,"name": string,"note"?: string | null,"restock_at_count"?: number | null,"restock_at_level"?: string | null,"stock_level"?: string | null,"supply_genre"?: string | null,"tracking": string,"unit_id"?: string | null,"updated_at"?: string
                   }
                   Update: {
-                    "created_at"?: string,"genre_id"?: string | null,"household_id"?: string,"id"?: string,"is_regular"?: boolean,"item_kind"?: string,"last_expiry_days"?: number | null,"location_id"?: string | null,"name"?: string,"restock_at_count"?: number | null,"restock_at_level"?: string | null,"stock_level"?: string | null,"tracking"?: string,"unit_id"?: string | null,"updated_at"?: string
+                    "created_at"?: string,"genre_id"?: string | null,"household_id"?: string,"id"?: string,"is_regular"?: boolean,"item_kind"?: string,"last_expiry_days"?: number | null,"location_id"?: string | null,"name"?: string,"note"?: string | null,"restock_at_count"?: number | null,"restock_at_level"?: string | null,"stock_level"?: string | null,"supply_genre"?: string | null,"tracking"?: string,"unit_id"?: string | null,"updated_at"?: string
                   }
                   Relationships: [
                     {

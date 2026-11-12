@@ -8,6 +8,7 @@ import { NEXT_LEVEL } from "./levels";
 import { checkMasterName, isMasterInUse, nextSortOrder, softReferences, type SoftReference } from "./masters";
 import { stepQuantity } from "./quantity";
 import { planRegistration, type RegistrationError, type RegistrationInput } from "./registration";
+import { normalizeFreeText, supplyStockOf } from "./supply";
 import {
   type AnyStockRow, type Genre, type Item, type ItemPatch, type ItemStock, type Location, type MasterKind, type MasterPatch,
   type NewItem, type NewItemStock, type NewMasterRow, type StockData, type StockLevel, type StockPatch, type Unit,
@@ -110,6 +111,9 @@ type Op = {
 };
 type Entry = { table: StockTable; id: string; inFlight: Op | null; running: boolean; queued: Op | null };
 
+const supplyStockTotal = (itemId: string, data: StockData): number =>
+  Math.round(data.stocks.filter((s) => s.itemId === itemId).reduce((a, s) => a + s.quantity, 0) * 10) / 10;
+
 const isMasterTable = (t: StockTable): t is MasterKind => t === "genre" || t === "location" || t === "unit";
 const SUBJECT = { item: "品物", genre: "ジャンル", location: "場所", unit: "単位" } as const;
 
@@ -118,9 +122,9 @@ function mutableOf(table: StockTable, row: AnyStockRow): Record<string, unknown>
   const pick = (keys: string[]) => Object.fromEntries(keys.map((k) => [k, (row as unknown as Record<string, unknown>)[k]]));
   switch (table) {
     case "item":
-      return pick(["name", "genreId", "unitId", "locationId", "stockLevel", "lastExpiryDays", "isRegular", "tracking", "restockAtCount", "restockAtLevel"]);
+      return pick(["name", "genreId", "unitId", "locationId", "stockLevel", "lastExpiryDays", "isRegular", "tracking", "restockAtCount", "restockAtLevel", "supplyGenre", "note"]);
     case "item_stock":
-      return pick(["quantity", "locationId", "expiresOn"]);
+      return pick(["quantity", "locationId", "expiresOn", "purchasedOn"]);
     case "genre":
       return pick(["name", "defaultLocationId"]);
     case "location":
@@ -471,6 +475,75 @@ export class StockStore {
       },
     };
   }
+
+  // ---- 日用品(30_architecture.md Interfaces §6 規則 18〜22。オンライン時のみ) ----
+  private supplyCountItem(itemId: string): Item | null {
+    const item = this.view.item.get(itemId) as Item | undefined;
+    return item && item.itemKind === "supply" && item.tracking === "count" ? item : null;
+  }
+  /** 数で管理の日用品の ±。合計が 0 になる − は 0 で止め(行は消さない)、「使い切りました」の UndoHandle を返す。在庫の行が無ければ + で作る */
+  stepSupply(itemId: string, delta: 1 | -1): UndoHandle | null {
+    if (this.offline) return null;
+    const item = this.supplyCountItem(itemId);
+    if (!item) return null;
+    const row = supplyStockOf(itemId, this.viewData());
+    return this.setSupplyTo(item, row, row ? stepQuantity(row.quantity, delta, "list") : delta === 1 ? 1 : null);
+  }
+  /** 品物の編集の数の欄から直接。0 なら「使い切りました」の UndoHandle */
+  setSupplyQuantity(itemId: string, quantity: number): UndoHandle | null {
+    if (this.offline) return null;
+    const item = this.supplyCountItem(itemId);
+    if (!item || !(quantity >= 0)) return null;
+    return this.setSupplyTo(item, supplyStockOf(itemId, this.viewData()), Math.round(quantity * 10) / 10);
+  }
+  private setSupplyTo(item: Item, row: ItemStock | undefined, next: number | null): UndoHandle | null {
+    if (next === null) return null;
+    if (!row) {
+      const id = this.newId();
+      const stamp = this.now().toISOString();
+      const created: ItemStock = {
+        id, householdId: this.householdId, itemId: item.id, quantity: next, locationId: null, purchasedOn: this.today, expiresOn: null,
+        createdAt: stamp, updatedAt: stamp,
+      };
+      this.view.item_stock.set(id, created);
+      this.touch(`item_stock:${id}`);
+      const { createdAt: _c, updatedAt: _u, ...payload } = created;
+      void _c;
+      void _u;
+      void this.enqueue("item_stock", id, { kind: "insert", payload: payload as Record<string, unknown>, silent: false, waiters: [] });
+      this.emit();
+      return null;
+    }
+    if (next === row.quantity) return null;
+    const before = row.quantity;
+    this.patchLocal("item_stock", row.id, { quantity: next });
+    void this.enqueue("item_stock", row.id, { kind: "patch", payload: { quantity: next }, silent: false, waiters: [] });
+    const totalNow = supplyStockTotal(item.id, this.viewData());
+    if (next !== 0 || totalNow !== 0) return null;
+    let undone = false;
+    return {
+      label: `${item.name}を使い切りました`,
+      undo: () => {
+        if (undone || this.offline || !this.view.item_stock.has(row.id)) return;
+        undone = true;
+        this.patchLocal("item_stock", row.id, { quantity: before });
+        void this.enqueue("item_stock", row.id, { kind: "patch", payload: { quantity: before }, silent: false, undo: true, waiters: [] });
+      },
+    };
+  }
+  setItemSupplyGenre(itemId: string, raw: string): void {
+    const item = this.view.item.get(itemId) as Item | undefined;
+    if (!item || item.itemKind !== "supply") return;
+    const v = normalizeFreeText(raw);
+    if (v !== item.supplyGenre) this.patchItem(itemId, { supplyGenre: v });
+  }
+  setItemNote(itemId: string, raw: string): void {
+    const item = this.view.item.get(itemId) as Item | undefined;
+    if (!item || item.itemKind !== "supply") return;
+    const v = normalizeFreeText(raw);
+    if (v !== item.note) this.patchItem(itemId, { note: v });
+  }
+
   cycleLevel(itemId: string): void {
     const item = this.itemOf(itemId);
     if (!item || item.tracking !== "level" || !item.stockLevel) return;
@@ -782,6 +855,13 @@ export class StockStore {
       });
     }
     let stockStep: Promise<OpResult> | null = null;
+    if (plan.stockPatch) {
+      // 数の日用品: 今の数に足す。品物の patch(あれば)のあとに送る。在庫が先に消えていたら登録の失敗(入れ直すと計画し直す)
+      this.patchLocal("item_stock", plan.stockPatch.id, plan.stockPatch.patch);
+      stockStep = this.enqueue("item_stock", plan.stockPatch.id, {
+        kind: "patch", payload: { ...plan.stockPatch.patch }, silent: true, after: itemStep ? itemStep.then((r) => r.ok) : undefined, waiters: [],
+      });
+    }
     if (plan.newStock) {
       const row: ItemStock = { ...plan.newStock, createdAt: plan.newStock.createdAt ?? stamp, updatedAt: stamp };
       this.remember("item_stock", row.id);
