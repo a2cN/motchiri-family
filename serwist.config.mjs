@@ -33,8 +33,8 @@ const config = {
   swDest: "out/sw.js",
   globDirectory: "out",
   globPatterns: ["**/*.{html,txt,js,css,png,ico,svg,webmanifest,json}"],
-  // フォント(woff2)は precache に入れない(sw.ts の runtimeCaching)。mock と sw.js 自身も入れない
-  globIgnores: ["sw.js", "sw.js.map", "**/*.woff2", "mock/**", "404.html"],
+  // フォント(woff2)は precache に入れない(sw.ts の runtimeCaching)。sw.js 自身も入れない
+  globIgnores: ["sw.js", "sw.js.map", "**/*.woff2", "404.html"],
   modifyURLPrefix: { "": BASE },
   dontCacheBustURLsMatching: /\/_next\/static\//,
   maximumFileSizeToCacheInBytes: 2 * 1024 * 1024,

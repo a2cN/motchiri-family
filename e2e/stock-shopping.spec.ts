@@ -4,7 +4,7 @@ import { sql } from "./db";
 import { openShoppingList, openSupply, resetMasters, resetShopping, seedStock, seedSupplies, stockHousehold } from "./stock-helpers";
 
 // 倉庫 run 3b(stock-shopping)の E2E(30_architecture.md Interfaces §12): 買い物リスト・買い物メモ・在庫登録・補充の目安・タブとサイドバー・R3-16。
-// part 1 の範囲(オンライン + 記憶の中の行列)。端末への保存・service worker・電波の無い起動は part 2、R3-11 の 6 秒の控えは part 3。
+// 端末への保存・service worker・電波の無い起動は別の spec(stock-shopping-offline など)。R3-11 の 6 秒の控えは最後のテスト。
 // 世帯は project ごとの L-<project>(run 1〜3a の世帯とは別)。ファイルの中は順に流し、各テストの始めに品物・買い物リスト・メモを初期の状態にする。
 // どの変更も、画面で見えるだけでなく DB に保存されている(poll)ことを確かめる。
 test.describe.configure({ mode: "serial" });
@@ -401,4 +401,48 @@ test("検査: 買い物リスト・メモ・在庫登録で、横スクロール
   await expect(qty(page, "豆乳")).toBeVisible();
   await check("在庫登録");
   void h;
+});
+
+// ---- R3-11: 品物の削除 → 買い物リストの行が消える → 6秒の「元に戻す」でチェック・並びごと戻る(ADR 0010、30 L-10 の注) ----
+test("品物の削除: 自動の行(チェック済み)と同じ名前の手入力の行が消え、6秒の「元に戻す」でチェック・並びごと戻る。保存される", async ({ page }, info) => {
+  const h = stockHousehold(info, SUITE);
+  sql(`update public.item set is_regular = true where household_id = '${h}' and name = '牛乳'`);
+  await openShoppingList(page, info);
+  await addManual(page, "納豆"); // 品物「納豆」と同じ名前の手入力の行
+  await expect(rowOf(page, "納豆")).toBeVisible();
+  await expect(rowOf(page, "牛乳")).toContainText("いつもの");
+  await checkbox(page, "牛乳").click(); // 自動の行をチェック済みにする
+  await expect(checkbox(page, "牛乳")).toBeChecked();
+  await expect.poll(() => dbEntry(h, "牛乳")?.is_checked, wait).toBe(true);
+  await expect.poll(() => dbEntry(h, "納豆")?.name, wait).toBe("納豆");
+  const before = await page.locator("main ul li").allInnerTexts();
+  const nav = page.getByRole("navigation", { name: "倉庫の画面" });
+
+  for (const name of ["牛乳", "納豆"]) {
+    // 食材 → 品物 → 削除(通知は 6 秒で消えるので、DB の確かめは挟まず、買い物リストへ戻って見て、すぐ「元に戻す」)
+    await nav.getByRole("link", { name: "食材" }).click();
+    await expect(page.locator("h1")).toHaveText("もっちり倉庫");
+    await page.getByRole("link", { name: "品物", exact: true }).click();
+    await expect(page.locator("h1")).toHaveText("品物の一覧");
+    await page.getByRole("button", { name: `${name}を削除` }).click();
+    await expect(page.getByText(`${name}を削除しました`)).toBeVisible();
+    await page.getByRole("link", { name: "もどる" }).click();
+    await expect(page.locator("h1")).toHaveText("もっちり倉庫");
+    await nav.getByRole("link", { name: "買い物リスト" }).click();
+    await expect(page.locator("h1")).toHaveText("買い物リスト");
+    await expect(rowOf(page, name)).toHaveCount(0); // 行が消える(自動の行も手入力の行も)
+    await page.getByRole("button", { name: "元に戻す" }).click();
+    await expect(rowOf(page, name)).toBeVisible();
+  }
+  await expect(checkbox(page, "牛乳")).toBeChecked(); // チェックも戻る
+  await expect(checkbox(page, "納豆")).not.toBeChecked();
+  expect(await page.locator("main ul li").allInnerTexts()).toEqual(before); // 並びも戻る
+  await expect.poll(() => dbItem(h, "牛乳")?.id, wait).toBeTruthy();
+  await expect.poll(() => dbEntry(h, "牛乳")?.is_checked, wait).toBe(true);
+  await expect.poll(() => dbEntry(h, "牛乳")?.item_id, wait).toBe(dbItem(h, "牛乳")!.id);
+  await expect.poll(() => dbEntry(h, "納豆")?.item_id ?? null, wait).toBeNull();
+  await page.reload();
+  await expect(rowOf(page, "納豆")).toBeVisible();
+  expect(await page.locator("main ul li").allInnerTexts()).toEqual(before);
+  await expect(checkbox(page, "牛乳")).toBeChecked();
 });
