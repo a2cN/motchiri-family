@@ -15,6 +15,8 @@ export default defineConfig({
   // ローカルの Supabase にテストの利用者と世帯を作る(30_architecture.md Interfaces §8)
   globalSetup: "./e2e/global-setup.ts",
   outputDir: "./e2e-artifacts/test-results",
+  // 1つのテストの上限。DB の確かめ(CLI)が多いテストは、3つ並列で 28〜30 秒になる(既定の 30 秒の縁。part 2 の全体の実行で時間切れが出た)ので 60 秒にする
+  timeout: 60_000,
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   reporter: [["list"]],
@@ -22,6 +24,8 @@ export default defineConfig({
     baseURL: `${ORIGIN}/motchiri-family/`,
     // WebKit は Safari に最も近い(NF-03)
     browserName: "webkit",
+    // service worker は止める(既存の spec の振る舞いを変えない。キャッシュの古い画面が混ざらない)。オフラインの spec だけ許す(30 L-22)
+    serviceWorkers: "block",
   },
   projects: [
     { name: "ipad-portrait", use: { ...devices["iPad (gen 7)"] } },

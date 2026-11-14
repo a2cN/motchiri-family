@@ -64,6 +64,16 @@ const supabaseImport = {
   message: "@supabase/supabase-js を import してよいのは src/lib/supabase/ だけ(30_architecture.md D-16)",
 };
 
+// 端末のデータ(IndexedDB)を触ってよいのは src/lib/local/ だけ。オフラインの書き込みは ShoppingStore.enqueue を通る(ADR 0004 の決まり、30_architecture.md L-12)
+const dexieImport = {
+  name: "dexie",
+  message: "dexie を import してよいのは src/lib/local/ だけ(ADR 0004、30_architecture.md L-12)。書き込みは ShoppingStore.enqueue を通る",
+};
+const dexiePattern = {
+  group: ["dexie/*", "dexie-*"],
+  message: "dexie を import してよいのは src/lib/local/ だけ(ADR 0004、30_architecture.md L-12)",
+};
+
 const serverImports = {
   paths: [
     {
@@ -135,7 +145,7 @@ const eslintConfig = defineConfig([
   {
     files: ["src/**/*.{ts,tsx}"],
     rules: {
-      "no-restricted-imports": ["error", { paths: [...serverImports.paths, supabaseImport] }],
+      "no-restricted-imports": ["error", { paths: [...serverImports.paths, supabaseImport, dexieImport], patterns: [dexiePattern] }],
       "no-restricted-syntax": ["error", ...base],
     },
   },
@@ -143,7 +153,14 @@ const eslintConfig = defineConfig([
   {
     files: ["src/lib/supabase/**/*.{ts,tsx}"],
     rules: {
-      "no-restricted-imports": ["error", serverImports],
+      "no-restricted-imports": ["error", { paths: [...serverImports.paths, dexieImport], patterns: [dexiePattern] }],
+    },
+  },
+  // 端末のデータを触ってよい場所(src/lib/local/)。supabase-js は使えない
+  {
+    files: ["src/lib/local/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-imports": ["error", { paths: [...serverImports.paths, supabaseImport] }],
     },
   },
   {

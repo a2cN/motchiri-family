@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Zen_Maru_Gothic } from "next/font/google";
+import { ServiceWorker } from "@/components/pwa/service-worker";
 import { GateSwitch } from "@/components/auth/gate-switch";
 import { startupImages } from "@/pwa/startup-images";
 import "./globals.css";
@@ -35,6 +36,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="ja" className={zenMaruGothic.variable}>
       <body className="flex min-h-dvh flex-col font-sans">
+        <ServiceWorker />
         <GateSwitch>{children}</GateSwitch>
       </body>
     </html>

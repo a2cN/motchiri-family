@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useMemo, useSyncExternalStore } from "react";
 import { useAuth } from "@/components/auth/auth-context";
+import { DexieShoppingLocal } from "@/lib/local/shopping-local";
 import { ShoppingStore, type ShoppingFailureNotice } from "@/modules/shopping/store";
 import type { ShoppingSnapshot } from "@/modules/shopping/types";
 import type { StockStore } from "@/modules/stock/store";
@@ -18,8 +19,12 @@ export function shoppingFailureMessage(n: ShoppingFailureNotice): string {
 }
 
 export function ShoppingProvider({ stockStore, children }: { stockStore: StockStore; children: React.ReactNode }) {
-  const { householdId } = useAuth();
-  const store = useMemo(() => (householdId ? new ShoppingStore(householdId) : null), [householdId]);
+  const { householdId, userId } = useAuth();
+  // 端末のデータは Dexie(part 2)。持ち主(世帯・利用者)が違う写しは、使う前に消える(L-19)
+  const store = useMemo(
+    () => (householdId ? new ShoppingStore(householdId, { local: new DexieShoppingLocal({ householdId, userId }) }) : null),
+    [householdId, userId],
+  );
 
   useEffect(() => {
     if (!store) return;

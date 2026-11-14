@@ -17,6 +17,8 @@ export type AuthContextValue = {
   email: string | null;
   householdId: string | null;
   notice: AuthNotice;
+  /** false = 覚えた世帯で出している(電波の無い起動。電波が戻ると確かめ直す) */
+  verified: boolean;
   signIn: (email: string, password: string) => Promise<SignInOutcome>;
   signOut: () => Promise<void>;
   retry: () => void;

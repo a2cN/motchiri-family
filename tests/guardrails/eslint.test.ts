@@ -252,4 +252,24 @@ describe("新規登録などを呼ぶコードの禁止と、Supabase の import
     const m = await errors(`import { cookies } from "next/headers";\nexport const c = cookies;\n`, "src/lib/supabase/x.ts");
     expect(ruleIds(m)).toContain("no-restricted-imports");
   });
+
+  it("G16: src/lib/local/ の外での dexie の import(components・modules・app)", async () => {
+    const code = `import Dexie from "dexie";\nexport const d = Dexie;\n`;
+    for (const file of ["src/components/x.ts", "src/modules/shopping/x.ts", "src/app/x/page.tsx", "src/lib/supabase/x.ts"]) {
+      expect(ruleIds(await errors(code, file)), file).toContain("no-restricted-imports");
+    }
+  });
+
+  it("G16b: dexie の下位パスの import も止める", async () => {
+    const m = await errors(`import { x } from "dexie/dist/dexie";\nexport const d = x;\n`, "src/modules/shopping/x.ts");
+    expect(ruleIds(m)).toContain("no-restricted-imports");
+  });
+
+  it("対照: src/lib/local/ の中での dexie の import は通る。supabase-js と next/headers は禁止のまま", async () => {
+    expect(await errors(`import Dexie from "dexie";\nexport const d = Dexie;\n`, "src/lib/local/x.ts")).toEqual([]);
+    const s = await errors(`import { createClient } from "@supabase/supabase-js";\nexport const c = createClient;\n`, "src/lib/local/x.ts");
+    expect(ruleIds(s)).toContain("no-restricted-imports");
+    const h = await errors(`import { cookies } from "next/headers";\nexport const c = cookies;\n`, "src/lib/local/x.ts");
+    expect(ruleIds(h)).toContain("no-restricted-imports");
+  });
 });

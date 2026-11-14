@@ -140,6 +140,35 @@ describe("読み込みと取り込み", () => {
     expect(s.hasLocalCopy).toBe(true);
     expect(h.server.fetchSince[0]).toBeNull();
   });
+  it("端末のデータの読み込みが遅くて、Realtime の接続が先に済んでも、写しの cursor を上書きして「写しが無い」にならない(Dexie の実体で出た競合)", async () => {
+    class SlowLocal extends MemoryShoppingLocal {
+      override async load() {
+        await new Promise((r) => setTimeout(r, 30));
+        return super.load();
+      }
+    }
+    const server = new FakeShoppingServer();
+    server.add("卵");
+    const store = new ShoppingStore("h1", {
+      api: server,
+      local: new SlowLocal(),
+      // 購読の直後(読み込みが終わる前)に subscribed が届く
+      subscribe: (_h, _c, status) => {
+        queueMicrotask(() => status("subscribed"));
+        return () => {};
+      },
+      timeoutMs: 1000,
+      isOnline: () => true,
+    });
+    live.push(store);
+    store.start();
+    await new Promise((r) => setTimeout(r, 120));
+    const s = store.getSnapshot();
+    expect(s.hasLocalCopy).toBe(true);
+    expect(s.entries.map((e) => e.name)).toEqual(["卵"]);
+    // 読み込みが済む前には取り込まない(取り込みは1回だけ。先に取り込むと、読み込みの値が cursor を上書きしたあとの電波の無い瞬間に「写しが無い」になる)
+    expect(server.fetchSince).toEqual([null]);
+  });
   it("2回目からは cursor の 60 秒前から読み、削除の印の付いた行は画面から消える(差分)", async () => {
     const h = await setup({ rows: [["卵", {}], ["米", {}]] });
     const row = h.server.rows.get("卵") as ShoppingListEntry;

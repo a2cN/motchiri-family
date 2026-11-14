@@ -68,6 +68,8 @@ export class ShoppingStore implements ShoppingHooks {
 
   private started = false;
   private stopped = false;
+  /** 端末の写しの読み込み(init)が済むまで、送る・取り込むを始めない(読み込みが終わる前の取り込みの cursor を、読み込みの値で上書きしない) */
+  private initDone: Promise<void> = Promise.resolve();
   private syncPromise: Promise<void> | null = null;
   private syncAgain = false;
   private commitChain: Promise<void> = Promise.resolve();
@@ -161,7 +163,8 @@ export class ShoppingStore implements ShoppingHooks {
       );
     }
     this.interval = setInterval(() => void this.syncIfOnline(), POLL_INTERVAL_MS);
-    void this.init();
+    this.initDone = this.init();
+    void this.initDone;
   }
   stop(): void {
     this.stopped = true;
@@ -190,7 +193,8 @@ export class ShoppingStore implements ShoppingHooks {
   }
 
   private async init(): Promise<void> {
-    const saved = await this.local.load();
+    // 端末のデータが読めなくても動く(正本はサーバー。写しなしの状態で始める)
+    const saved = await this.local.load().catch(() => ({ list: [], memo: null, outbox: [], candidates: [], cursor: null }) as Awaited<ReturnType<ShoppingLocal["load"]>>);
     if (this.stopped) return;
     for (const e of saved.list) if (!this.copy.has(e.id)) this.copy.set(e.id, e);
     if (!this.memoCopy) this.memoCopy = saved.memo;
@@ -199,7 +203,7 @@ export class ShoppingStore implements ShoppingHooks {
     this.outbox = [...saved.outbox, ...added];
     this.nextSeq = Math.max(this.nextSeq, ...this.outbox.map((o) => o.seq + 1));
     if (this.candidates.length === 0) this.candidates = saved.candidates;
-    this.cursor = saved.cursor;
+    this.cursor ??= saved.cursor;
     if (this.cursor !== null) this.load = "ready";
     this.emit();
     void this.syncIfOnline();
@@ -247,6 +251,7 @@ export class ShoppingStore implements ShoppingHooks {
     }
     const run = (async () => {
       try {
+        await this.initDone;
         do {
           this.syncAgain = false;
           await this.flush();

@@ -12,9 +12,10 @@ export const FIXED_NOW = new Date("2026-10-23T12:00:00+09:00"); // 金曜。期�
  * suite: "main"(stock.spec.ts。S1・S2)、"shots"(stock-screens.spec.ts。別の世帯。同じ世帯を2つのワーカーが同時に触らないため)、
  * "master"(stock-master.spec.ts。M1・M2。マスタを変える)、"mshots"(stock-master-screens.spec.ts)、
  * "supply"(stock-supply.spec.ts。D1・D2)、"sshots"(stock-supply-screens.spec.ts。DS)、
- * "shopping"(stock-shopping*.spec.ts。L1・L2)、"lshots"(stock-shopping-screens.spec.ts。LS)
+ * "shopping"(stock-shopping.spec.ts。L1・L2)、"lshots"(stock-shopping-screens.spec.ts。LS)、
+ * "sync"(stock-shopping-sync.spec.ts。Y1・Y2)、"offline"(stock-shopping-offline.spec.ts。O1・O2)
  */
-export type Suite = "main" | "shots" | "master" | "mshots" | "supply" | "sshots" | "shopping" | "lshots";
+export type Suite = "main" | "shots" | "master" | "mshots" | "supply" | "sshots" | "shopping" | "lshots" | "sync" | "offline";
 
 const SUITE_KEYS: Record<Suite, { household: string; email: (n: 1 | 2) => string }> = {
   main: { household: "HOUSEHOLD_ID", email: (n) => `S${n}_EMAIL` },
@@ -25,6 +26,8 @@ const SUITE_KEYS: Record<Suite, { household: string; email: (n: 1 | 2) => string
   sshots: { household: "SSHOTS_HOUSEHOLD_ID", email: () => "DS_EMAIL" },
   shopping: { household: "SHOPPING_HOUSEHOLD_ID", email: (n) => `L${n}_EMAIL` },
   lshots: { household: "LSHOTS_HOUSEHOLD_ID", email: () => "LS_EMAIL" },
+  sync: { household: "SYNC_HOUSEHOLD_ID", email: (n) => `Y${n}_EMAIL` },
+  offline: { household: "OFFLINE_HOUSEHOLD_ID", email: (n) => `O${n}_EMAIL` },
 };
 
 export function stockWho(info: TestInfo, n: 1 | 2, suite: Suite = "main") {

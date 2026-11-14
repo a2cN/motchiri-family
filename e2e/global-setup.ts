@@ -6,6 +6,7 @@ import { cli, parseJson, sql } from "./db";
 //   倉庫(stock-food): 画面サイズ(project)ごとに世帯 S-<project> と2人(S1・S2)。倉庫の spec は自分の project の世帯だけを使う(D-21)
 //   倉庫(stock-supply): 同じく D-<project>(D1・D2。日用品の spec)と DS-<project>(DS。スクリーンショットの spec)。run 1・2 の世帯とは別(30_architecture.md S-12)
 //   倉庫(stock-shopping): 同じく L-<project>(L1・L2。買い物リストの spec)と LS-<project>(LS。スクリーンショットの spec)。run 1〜3a の世帯とは別(30_architecture.md Interfaces §12)
+//   倉庫(stock-shopping part 2): Y-<project>(Y1・Y2。2つのブラウザの同期の spec)と O-<project>(O1・O2。電波の無い起動・オフラインの spec)。同じ世帯を別のファイルが同時に触らないための別の世帯
 //   倉庫(stock-master): 同じく M-<project>(M1・M2。マスタを変える spec)と MS-<project>(MS。スクリーンショットの spec)。マスタを変えるので別の世帯(30_architecture.md M-13)
 // メールは e2e-…@example.com(架空)、パスワードは実行のたびの乱数。ローカルの秘密のキーはこのプロセスのメモリの中だけ(ファイルにもログにも出さない)。
 // 値は環境変数でテストのワーカーに渡す(E2E_…)。ローカル(127.0.0.1)以外には、何もしない。
@@ -51,6 +52,11 @@ export default async function globalSetup() {
     stockEmails[`L1_${project}`] = `e2e-l1-${project}@example.com`;
     stockEmails[`L2_${project}`] = `e2e-l2-${project}@example.com`;
     stockEmails[`LS_${project}`] = `e2e-ls-${project}@example.com`;
+    // part 2(C5・C6): 2つのブラウザの同期の spec(Y1・Y2)と、電波の無い起動・オフラインの spec(O1・O2)。同じ世帯を別のファイルが同時に触らないよう別の世帯
+    stockEmails[`Y1_${project}`] = `e2e-y1-${project}@example.com`;
+    stockEmails[`Y2_${project}`] = `e2e-y2-${project}@example.com`;
+    stockEmails[`O1_${project}`] = `e2e-o1-${project}@example.com`;
+    stockEmails[`O2_${project}`] = `e2e-o2-${project}@example.com`;
   }
 
   const ids: Record<string, string> = {};
@@ -110,6 +116,16 @@ export default async function globalSetup() {
     sql(`insert into public.member (user_id, household_id) values ('${ids[`LS_${project}`]}', '${lshots}')`);
     process.env[`E2E_STOCK_${project}_LSHOTS_HOUSEHOLD_ID`] = lshots;
     process.env[`E2E_STOCK_${project}_LS_EMAIL`] = stockEmails[`LS_${project}`];
+    const sync = String(sql("insert into public.household default values returning id")[0].id);
+    sql(`insert into public.member (user_id, household_id) values ('${ids[`Y1_${project}`]}', '${sync}'), ('${ids[`Y2_${project}`]}', '${sync}')`);
+    process.env[`E2E_STOCK_${project}_SYNC_HOUSEHOLD_ID`] = sync;
+    process.env[`E2E_STOCK_${project}_Y1_EMAIL`] = stockEmails[`Y1_${project}`];
+    process.env[`E2E_STOCK_${project}_Y2_EMAIL`] = stockEmails[`Y2_${project}`];
+    const offline = String(sql("insert into public.household default values returning id")[0].id);
+    sql(`insert into public.member (user_id, household_id) values ('${ids[`O1_${project}`]}', '${offline}'), ('${ids[`O2_${project}`]}', '${offline}')`);
+    process.env[`E2E_STOCK_${project}_OFFLINE_HOUSEHOLD_ID`] = offline;
+    process.env[`E2E_STOCK_${project}_O1_EMAIL`] = stockEmails[`O1_${project}`];
+    process.env[`E2E_STOCK_${project}_O2_EMAIL`] = stockEmails[`O2_${project}`];
   }
 
   process.env.E2E_SUPABASE_URL = apiUrl;

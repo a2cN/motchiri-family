@@ -188,6 +188,7 @@ test("チェック: 行は動かず、残量の品物(しょうゆ)は ○ に�
 
 // ---- 在庫登録 ----
 test("在庫登録: 数の食材(牛乳)に足す・残量の品物(しょうゆ)は名前だけ・新しい品物(豆乳)。確定で行が消え、在庫が増え、しょうゆは ○ のまま", async ({ page }, info) => {
+  test.setTimeout(90_000); // DB の確かめ(CLI)が多く、並列の実行では 30 秒を超えることがある(part 2 の全体の実行で1度、時間切れ)
   const h = stockHousehold(info, SUITE);
   await openShoppingList(page, info);
   await addManual(page, "牛乳");
