@@ -6,11 +6,13 @@ import { Button } from "@/components/ui/button";
 import { Toggle } from "@/components/ui/toggle";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { groupItemsByGenre } from "@/modules/stock/items";
+import { restockLabel } from "@/modules/stock/restock";
 import { itemEditHref, itemsHref, parseItemsQuery, stockHref } from "@/modules/stock/routes";
 import { groupSupplyItemsByGenre } from "@/modules/stock/supply";
 import { MSG_OFFLINE, OfflineCard, StateCard, loadStateBody, notify } from "./bits";
 import { Card } from "./card";
 import { Frame } from "./frame";
+import { useLookup } from "./lookup";
 import { useAfterDelay, useStock } from "./stock-provider";
 
 // 品物の一覧(docs/design/stock/ の「品物の一覧」+ docs/design/stock-supply/: 「食材 / 日用品」の切り替えと右の件数、補充の目安なし)。
@@ -20,6 +22,7 @@ export function ItemsView() {
   const router = useRouter();
   const { from, kind } = parseItemsQuery(useSearchParams());
   const { load, connection, data } = snapshot;
+  const lookup = useLookup(data);
   const offline = connection === "offline";
   const groups =
     kind === "food"
@@ -78,7 +81,7 @@ export function ItemsView() {
                       className="block min-h-16 min-w-0 flex-1 py-2 text-foreground no-underline active:bg-accent"
                     >
                       <div className="text-lg font-strong break-words">{item.name}</div>
-                      <div className="text-base text-muted-foreground">{item.tracking === "count" ? "数で管理" : "残量で管理"}</div>
+                      <div className="text-base text-muted-foreground">{item.tracking === "count" ? "数で管理" : "残量で管理"} · {restockLabel(item, lookup.unitName(item))}</div>
                     </Link>
                     <div className="flex shrink-0 items-center gap-1">
                       <Toggle

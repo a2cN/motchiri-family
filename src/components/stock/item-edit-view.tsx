@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { trackingDefaults, totalQuantity } from "@/modules/stock/items";
+import { toRestockUi } from "@/modules/stock/restock";
 import { LEVEL_SYMBOL } from "@/modules/stock/levels";
 import { formatQuantity, parseQuantity, stepQuantity } from "@/modules/stock/quantity";
 import { backHrefForEdit, parseItemEditQuery } from "@/modules/stock/routes";
@@ -19,6 +20,7 @@ import {
 import { Card } from "./card";
 import { Frame } from "./frame";
 import { useLookup } from "./lookup";
+import { RestockField, defaultRestockForm, restockUiFromForm, toRestockForm, type RestockForm } from "./restock-field";
 import { useAfterDelay, useStock } from "./stock-provider";
 
 // 品物の編集(docs/design/stock/ の品物の編集 + docs/design/stock-master/ + docs/design/stock-supply/)。カード4つ: 品物 / 管理のしかた / いつもの / 在庫(残量)。
@@ -90,6 +92,7 @@ function Editor({ item, data, offline, back, onLeave }: { item: Item; data: Stoc
               <legend className="mb-1 text-base font-strong">管理のしかた</legend>
               <p className="text-base">いまは {item.tracking === "count" ? "数で管理" : "残量で管理"}</p>
             </fieldset>
+            <RestockEditor item={item} unit={lookup.unitName(item)} offline={offline} />
             {panel ? (
               <TrackingPanel item={item} data={data} lookup={lookup} onClose={() => setPanel(false)} onDone={() => setPanel(false)} />
             ) : (
@@ -230,7 +233,32 @@ function ItemCard({ item, data, offline, lookup }: { item: Item; data: StockData
   );
 }
 
-// 管理のしかたを変えるパネル(補充の目安は出さない。OD-stock-master-01 (3) A)
+// 補充の目安(R3-9。docs/design/stock-shopping/)。選び直したとき・数の欄を離れたときに保存する(保存のボタンは無い)。電波が無いときは変えられない
+function RestockEditor({ item, unit, offline }: { item: Item; unit: string; offline: boolean }) {
+  const { store } = useStock();
+  const saved = toRestockForm(toRestockUi(item));
+  const key = `${saved.mode}:${saved.n}`;
+  const [draft, setDraft] = useState<{ key: string; form: RestockForm } | null>(null);
+  // 保存された値が変わったら(自分の保存・相手の変更)下書きを捨てて、その値にそろえる
+  const shown = draft && draft.key === key ? draft.form : saved;
+  return (
+    <RestockField
+      idPrefix="edit-restock"
+      tracking={item.tracking}
+      unit={unit}
+      value={shown}
+      readOnly={offline}
+      onChange={(next) => (offline ? notify(MSG_OFFLINE) : setDraft({ key, form: next }))}
+      onCommit={(next) => {
+        if (offline || next.error) return;
+        const ui = restockUiFromForm(next);
+        if (ui) store.setRestock(item.id, ui);
+      }}
+    />
+  );
+}
+
+// 管理のしかたを変えるパネル(新しい管理のしかたの補充の目安も選ぶ。docs/design/stock-shopping/)
 function TrackingPanel({
   item, data, lookup, onClose, onDone,
 }: {
@@ -244,14 +272,20 @@ function TrackingPanel({
   const [unitId, setUnitId] = useState<string | null>(defaults.unitId);
   const [unitError, setUnitError] = useState(false);
   const [qty, setQty] = useState<{ text: string; error: string | null }>({ text: defaults.quantityText, error: null });
+  const [restock, setRestock] = useState<RestockForm>(() => defaultRestockForm(toLevel ? "level" : "count"));
   const bodyRef = useRef<HTMLDivElement>(null);
   useEffect(() => bodyRef.current?.focus(), []);
   const unit = unitId ? lookup.units.find((u) => u.id === unitId) : undefined;
 
   const apply = () => {
     let input: Parameters<typeof store.changeTracking>[1];
+    const restockUi = restockUiFromForm(restock);
+    if (!restockUi) {
+      setRestock({ ...restock, error: restock.error ?? QUANTITY_ERROR.not_positive });
+      return;
+    }
     if (toLevel) {
-      input = { to: "level", level };
+      input = { to: "level", level, restock: restockUi };
     } else {
       let bad = false;
       if (!unitId) {
@@ -264,7 +298,7 @@ function TrackingPanel({
         bad = true;
       }
       if (bad || !r.ok || !unitId) return;
-      input = { to: "count", unitId, quantity: r.value };
+      input = { to: "count", unitId, quantity: r.value, restock: restockUi };
     }
     const handle = store.changeTracking(item.id, input);
     if (handle) notify(handle.label, { label: "元に戻す", onClick: handle.undo });
@@ -327,6 +361,7 @@ function TrackingPanel({
           </GroupField>
         </>
       )}
+      <RestockField idPrefix="edit-panel-restock" tracking={toLevel ? "level" : "count"} unit={unit?.name ?? ""} value={restock} onChange={setRestock} />
       <div className="mt-4 flex items-center gap-2">
         <Button type="button" onClick={apply}>
           変える

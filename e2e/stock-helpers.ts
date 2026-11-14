@@ -11,9 +11,10 @@ export const FIXED_NOW = new Date("2026-10-23T12:00:00+09:00"); // 金曜。期�
 /**
  * suite: "main"(stock.spec.ts。S1・S2)、"shots"(stock-screens.spec.ts。別の世帯。同じ世帯を2つのワーカーが同時に触らないため)、
  * "master"(stock-master.spec.ts。M1・M2。マスタを変える)、"mshots"(stock-master-screens.spec.ts)、
- * "supply"(stock-supply.spec.ts。D1・D2)、"sshots"(stock-supply-screens.spec.ts。DS)
+ * "supply"(stock-supply.spec.ts。D1・D2)、"sshots"(stock-supply-screens.spec.ts。DS)、
+ * "shopping"(stock-shopping*.spec.ts。L1・L2)、"lshots"(stock-shopping-screens.spec.ts。LS)
  */
-export type Suite = "main" | "shots" | "master" | "mshots" | "supply" | "sshots";
+export type Suite = "main" | "shots" | "master" | "mshots" | "supply" | "sshots" | "shopping" | "lshots";
 
 const SUITE_KEYS: Record<Suite, { household: string; email: (n: 1 | 2) => string }> = {
   main: { household: "HOUSEHOLD_ID", email: (n) => `S${n}_EMAIL` },
@@ -22,6 +23,8 @@ const SUITE_KEYS: Record<Suite, { household: string; email: (n: 1 | 2) => string
   mshots: { household: "MSHOTS_HOUSEHOLD_ID", email: () => "MS_EMAIL" },
   supply: { household: "SUPPLY_HOUSEHOLD_ID", email: (n) => `D${n}_EMAIL` },
   sshots: { household: "SSHOTS_HOUSEHOLD_ID", email: () => "DS_EMAIL" },
+  shopping: { household: "SHOPPING_HOUSEHOLD_ID", email: (n) => `L${n}_EMAIL` },
+  lshots: { household: "LSHOTS_HOUSEHOLD_ID", email: () => "LS_EMAIL" },
 };
 
 export function stockWho(info: TestInfo, n: 1 | 2, suite: Suite = "main") {
@@ -176,6 +179,20 @@ export async function openSupply(page: Page, info: TestInfo, who: 1 | 2 = 1, sui
   await loginWith(page, stockWho(info, who, suite));
   await page.goto("stock/supply/");
   await expect(page.locator("h1")).toHaveText("日用品");
+}
+
+/** 買い物リスト・メモを初期の状態にする(shopping_list は削除の権限が無いので、DB に直接つないで消す) */
+export function resetShopping(household: string) {
+  sql(`delete from public.shopping_list where household_id = '${household}'`);
+  sql(`update public.shopping_memo set body = '' where household_id = '${household}'`);
+}
+
+/** 固定した時刻でログインし、買い物リストの画面を開く */
+export async function openShoppingList(page: Page, info: TestInfo, who: 1 | 2 = 1, suite: Suite = "shopping") {
+  await page.clock.setFixedTime(FIXED_NOW);
+  await loginWith(page, stockWho(info, who, suite));
+  await page.goto("stock/shopping-list/");
+  await expect(page.locator("h1")).toHaveText("買い物リスト");
 }
 
 export function shotPath(info: TestInfo, name: string): string {

@@ -183,14 +183,14 @@ test("日用品: 検索(部分一致・全角半角・大文字小文字を区�
 });
 
 // ---- 品物の登録 ----
-test("登録: 種別「日用品」(日用品の画面から開くと初期値は日用品・残量)。補充の目安・場所・期限は出ない。保存される", async ({ page }, info) => {
+test("登録: 種別「日用品」(日用品の画面から開くと初期値は日用品・残量)。補充の目安は出る(3b)。場所・期限は出ない。保存される", async ({ page }, info) => {
   const h = stockHousehold(info, SUITE);
   await openSupply(page, info);
   await page.getByRole("link", { name: "品物の登録" }).first().click();
   await expect(page.locator("h1")).toHaveText("品物の登録");
   await expect(page.getByRole("group", { name: "品物の種類" }).getByRole("button", { name: "日用品" })).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByRole("group", { name: "管理のしかた" }).getByRole("button", { name: "残量で管理" })).toHaveAttribute("aria-pressed", "true");
-  await expect(page.getByText("補充の目安")).toHaveCount(0);
+  await expect(page.locator("fieldset[data-restock]")).toBeVisible(); // 3b(stock-shopping)で正典の形に戻した(3a では出さなかった)
   await expect(page.getByText("場所", { exact: true })).toHaveCount(0);
   await expect(page.getByText("期限", { exact: true })).toHaveCount(0);
   await expect(page.getByLabel("備考")).toBeVisible();
@@ -335,7 +335,7 @@ test("編集(日用品): ジャンル・備考・数を直す。ジャンルを�
   await page.getByRole("link", { name: "歯みがき粉を編集" }).click();
   await expect(page.locator("h1")).toHaveText("品物の編集");
   await expect(page.locator("main").getByText("日用品", { exact: true })).toBeVisible();
-  await expect(page.getByText("補充の目安")).toHaveCount(0);
+  await expect(page.locator("fieldset[data-restock]")).toBeVisible(); // 3b で正典の形に戻した
   await expect(page.getByText("場所", { exact: true })).toHaveCount(0); // 日用品は場所を持たない
   await expect(page.locator("#edit-genre")).toHaveValue("洗面所");
   // ジャンルを新しい語に: 「洗面所」はこの品物だけが使っていたので候補から消える

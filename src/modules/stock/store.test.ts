@@ -2,7 +2,8 @@ import { afterEach, describe, expect, it } from "vitest";
 import type { RowChange } from "@/lib/supabase/realtime";
 import type { StockFailure, StockResult } from "@/lib/supabase/stock";
 import { genres, item, locations, stock, units } from "./fixtures";
-import { StockStore, type FailureNotice, type StockApi } from "./store";
+import { StockStore, type FailureNotice, type ShoppingHooks, type StockApi } from "./store";
+import type { ShoppingListEntry } from "@/modules/shopping/types";
 import type { Genre, Item, ItemPatch, ItemStock, Location, MasterKind, MasterPatch, NewItem, NewItemStock, NewMasterRow, StockData, StockPatch, Unit } from "./types";
 
 // Supabase を偽物に差し替えた store の単体テスト。偽のサーバーは行を持ち、サーバーの時刻(updatedAt)を単調に進める。
@@ -88,6 +89,10 @@ class FakeServer implements StockApi {
     this.items.delete(id);
     for (const [sid, st] of [...this.stocks]) if (st.itemId === id) this.stocks.delete(sid);
     return { ok: true, value: null };
+  }
+  async itemExists(id: string): Promise<StockResult<boolean>> {
+    this.calls.push(`itemExists:${id}`);
+    return { ok: true, value: this.items.has(id) };
   }
   async insertMaster(table: MasterKind, row: NewMasterRow): Promise<StockResult<Genre | Location | Unit>> {
     this.calls.push(`insertMaster:${table}:${row.name}`);
@@ -193,7 +198,7 @@ type Harness = {
 const live: StockStore[] = [];
 afterEach(() => live.splice(0).forEach((s) => s.stop()));
 
-async function setup(opts: { items?: Item[]; stocks?: ItemStock[]; online?: boolean; timeoutMs?: number } = {}): Promise<Harness> {
+async function setup(opts: { items?: Item[]; stocks?: ItemStock[]; online?: boolean; timeoutMs?: number; shoppingHooks?: ShoppingHooks } = {}): Promise<Harness> {
   const server = new FakeServer();
   for (const i of opts.items ?? []) server.items.set(i.id, { ...i, updatedAt: server.stamp() });
   for (const s of opts.stocks ?? []) server.stocks.set(s.id, { ...s, updatedAt: server.stamp() });
@@ -211,6 +216,7 @@ async function setup(opts: { items?: Item[]; stocks?: ItemStock[]; online?: bool
     newId: () => `id-${++n}`,
     timeoutMs: opts.timeoutMs ?? 5000,
     isOnline: () => opts.online ?? true,
+    shoppingHooks: opts.shoppingHooks,
   });
   live.push(store);
   const notices: FailureNotice[] = [];
@@ -511,7 +517,7 @@ describe("登録", () => {
   const base = {
     kind: "food" as const, supplyGenre: null, note: null,
     name: "ヨーグルト", tracking: "count" as const, genreId: "g-dairy", unitId: "u-ko", quantity: 3, stockLevel: "full" as const,
-    locationId: "loc-fridge", purchasedOn: "2026-10-23", expiresOn: "2026-10-30",
+    locationId: "loc-fridge", purchasedOn: "2026-10-23", restockAtCount: null, restockAtLevel: null, expiresOn: "2026-10-30",
   };
   it("在庫がすぐ一覧に出て、品物 → 在庫の順に送る", async () => {
     const h = await setup();
@@ -780,7 +786,7 @@ describe("品物の削除と「元に戻す」(規則 12・14・15)", () => {
     const reg = await h.store.register({
       kind: "food", supplyGenre: null, note: null,
       name: "新しい品", tracking: "count", genreId: "g-veg", unitId: "u-ko", quantity: 1, stockLevel: "full",
-      locationId: "loc-fridge", purchasedOn: "2026-10-23", expiresOn: null,
+      locationId: "loc-fridge", purchasedOn: "2026-10-23", restockAtCount: null, restockAtLevel: null, expiresOn: null,
     });
     expect(reg).toEqual({ ok: true });
     expect([...h.server.items.values()].some((i) => i.name === "新しい品")).toBe(true);
@@ -899,7 +905,7 @@ describe("管理のしかたの変更(規則 13・14)", () => {
     h.server.items.set("milk", { ...milk, tracking: "level", stockLevel: "full", unitId: null, updatedAt: h.server.stamp() }); // サーバーでは残量
     const r = await h.store.register({
       kind: "food", supplyGenre: null, note: null,
-      name: "牛乳", tracking: "count", genreId: "g-dairy", unitId: "u-ko", quantity: 1, stockLevel: "full", locationId: "loc-fridge", purchasedOn: "2026-10-23", expiresOn: null,
+      name: "牛乳", tracking: "count", genreId: "g-dairy", unitId: "u-ko", quantity: 1, stockLevel: "full", locationId: "loc-fridge", purchasedOn: "2026-10-23", restockAtCount: null, restockAtLevel: null, expiresOn: null,
     });
     expect(r.ok).toBe(false);
   });
@@ -913,7 +919,7 @@ describe("日用品(stock-supply 規則 18〜22)", () => {
   const wrapStock = (q: number) => stock("w1", "wrap", q, { locationId: null });
   const supplyRegister = {
     kind: "supply" as const, supplyGenre: null, note: null, name: "ラップ", tracking: "count" as const, genreId: null, unitId: "u-ko",
-    quantity: 2, stockLevel: "full" as const, locationId: null, purchasedOn: "2026-10-23", expiresOn: null,
+    quantity: 2, stockLevel: "full" as const, locationId: null, purchasedOn: "2026-10-23", restockAtCount: null, restockAtLevel: null, expiresOn: null,
   };
 
   it("数の日用品: 0 にしても行を消さずに 0 を patch し、「使い切りました」を返す", async () => {
@@ -1047,5 +1053,112 @@ describe("日用品(stock-supply 規則 18〜22)", () => {
     handle?.undo();
     await flush();
     expect([...h.server.stocks.values()]).toHaveLength(0);
+  });
+});
+
+describe("R3-16: 品物ごと消えていたか(3b)", () => {
+  it("在庫の書き込みが 0 行で、品物も無ければ item_gone。品物と在庫が画面から消える", async () => {
+    const h = await setup({ items: [milk], stocks: [stock("s1", "milk", 2)] });
+    h.server.items.delete("milk");
+    h.server.stocks.delete("s1");
+    h.store.step("s1", 1);
+    await flush();
+    expect(h.server.calls.filter((c) => c.startsWith("itemExists"))).toEqual(["itemExists:milk"]);
+    expect(h.notices).toEqual([{ kind: "item_gone", itemName: "牛乳" }]);
+    expect(h.it("milk")).toBeUndefined();
+    expect(h.q("s1")).toBeUndefined();
+  });
+  it("品物がまだあるなら、今までどおり gone(品物は残る)", async () => {
+    const h = await setup({ items: [natto], stocks: [stock("s1", "natto", 1)] });
+    h.server.stocks.delete("s1");
+    h.store.step("s1", 1);
+    await flush();
+    expect(h.notices).toEqual([{ kind: "gone", itemName: "納豆" }]);
+    expect(h.it("natto")).toBeDefined();
+  });
+  it("品物があるかを聞けなかったら gone(1回だけ聞く)", async () => {
+    const h = await setup({ items: [natto], stocks: [stock("s1", "natto", 1)] });
+    h.server.stocks.delete("s1");
+    h.server.itemExists = async () => ({ ok: false, reason: "network" });
+    h.store.step("s1", 1);
+    await flush();
+    expect(h.notices).toEqual([{ kind: "gone", itemName: "納豆" }]);
+  });
+});
+
+describe("補充の目安の変更(3b、R3-9)", () => {
+  it("品物の update を1回送る。数: 切れたら = 0、数で決める = n、なし = null", async () => {
+    const h = await setup({ items: [natto], stocks: [stock("s1", "natto", 1)] });
+    h.store.setRestock("natto", { kind: "zero" });
+    await flush();
+    expect(h.server.items.get("natto")?.restockAtCount).toBe(0);
+    h.store.setRestock("natto", { kind: "count", n: 2 });
+    await flush();
+    expect(h.server.items.get("natto")?.restockAtCount).toBe(2);
+    h.store.setRestock("natto", { kind: "none" });
+    await flush();
+    expect(h.server.items.get("natto")?.restockAtCount).toBeNull();
+  });
+  it("残量の品物: △で・×で。管理のしかたに合わない値は なし になり、同じ値なら送らない", async () => {
+    const h = await setup({ items: [mayo] });
+    h.store.setRestock("mayo", { kind: "out" });
+    await flush();
+    expect(h.server.items.get("mayo")).toMatchObject({ restockAtLevel: "out", restockAtCount: null });
+    const calls = h.server.calls.length;
+    h.store.setRestock("mayo", { kind: "out" });
+    await flush();
+    expect(h.server.calls.length).toBe(calls);
+  });
+  it("オフラインでは何もしない", async () => {
+    const h = await setup({ items: [natto], online: false });
+    h.store.setRestock("natto", { kind: "zero" });
+    await flush();
+    expect(h.server.items.get("natto")?.restockAtCount).toBeNull();
+  });
+});
+
+describe("品物の削除と買い物リストの行(3b、R3-11・ADR 0010)", () => {
+  const entry = (id: string, over: Partial<ShoppingListEntry> = {}): ShoppingListEntry => ({
+    id, householdId: "h1", createdAt: "2026-10-23T00:00:00Z", updatedAt: "2026-10-23T00:00:00Z", itemId: "milk", name: "牛乳", source: "regular",
+    isChecked: true, isDismissed: false, prevStockLevel: null, deletedAt: null, ...over,
+  });
+  it("削除の前に控えをもらい、元に戻すと品物の作り直しのあとで行を戻す", async () => {
+    const order: string[] = [];
+    const hooks: ShoppingHooks = {
+      linkedEntries: (itemId, name) => {
+        order.push(`linked:${itemId}:${name}`);
+        return [entry("e1")];
+      },
+      restoreEntries: async (rows) => {
+        order.push(`restore:${rows.map((r) => r.id).join(",")}:items=${[...h.server.items.keys()].join(",")}`);
+        return true;
+      },
+    };
+    const h = await setup({ items: [milk], stocks: [stock("s1", "milk", 2)], shoppingHooks: hooks });
+    const handle = h.store.deleteItem("milk") as { undo: () => void };
+    await flush();
+    handle.undo();
+    await flush();
+    expect(order).toEqual(["linked:milk:牛乳", "restore:e1:items=milk"]);
+    expect(h.notices).toEqual([]);
+  });
+  it("行を戻せなかったら undo_failed", async () => {
+    const hooks: ShoppingHooks = { linkedEntries: () => [entry("e1")], restoreEntries: async () => false };
+    const h = await setup({ items: [milk], shoppingHooks: hooks });
+    const handle = h.store.deleteItem("milk") as { undo: () => void };
+    await flush();
+    handle.undo();
+    await flush();
+    expect(h.notices).toEqual([{ kind: "undo_failed", itemName: "牛乳" }]);
+  });
+  it("控えが空なら restoreEntries は呼ばない", async () => {
+    let called = false;
+    const hooks: ShoppingHooks = { linkedEntries: () => [], restoreEntries: async () => ((called = true), true) };
+    const h = await setup({ items: [milk], shoppingHooks: hooks });
+    const handle = h.store.deleteItem("milk") as { undo: () => void };
+    await flush();
+    handle.undo();
+    await flush();
+    expect(called).toBe(false);
   });
 });

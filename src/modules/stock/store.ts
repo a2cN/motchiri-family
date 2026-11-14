@@ -1,14 +1,17 @@
 import * as realApi from "@/lib/supabase/stock";
 import { subscribeHousehold as realSubscribe, type ChannelStatus, type RowChange } from "@/lib/supabase/realtime";
 import type { StockFailure, StockResult, StockTable } from "@/lib/supabase/stock";
+import { cmpTs } from "@/lib/timestamp";
 import { TimeoutError, withTimeout } from "@/lib/timing";
 import { todayInJst } from "./dates";
 import { checkItemName, planTrackingChange, type TrackingChangeInput } from "./items";
+import { fromRestockUi, type RestockUi } from "./restock";
 import { NEXT_LEVEL } from "./levels";
 import { checkMasterName, isMasterInUse, nextSortOrder, softReferences, type SoftReference } from "./masters";
 import { stepQuantity } from "./quantity";
 import { planRegistration, type RegistrationError, type RegistrationInput } from "./registration";
 import { normalizeFreeText, supplyStockOf } from "./supply";
+import type { ShoppingListEntry } from "@/modules/shopping/types";
 import {
   type AnyStockRow, type Genre, type Item, type ItemPatch, type ItemStock, type Location, type MasterKind, type MasterPatch,
   type NewItem, type NewItemStock, type NewMasterRow, type StockData, type StockLevel, type StockPatch, type Unit,
@@ -65,6 +68,8 @@ export interface StockApi {
   updateStock(id: string, patch: StockPatch, signal: AbortSignal): Promise<StockResult<ItemStock>>;
   deleteStock(id: string, signal: AbortSignal): Promise<StockResult<null>>;
   deleteItem(id: string, signal: AbortSignal): Promise<StockResult<null>>;
+  /** R3-16: 在庫の書き込みが not_found のとき、品物ごと消えたかを1回だけ聞く */
+  itemExists(id: string, signal: AbortSignal): Promise<StockResult<boolean>>;
   insertMaster(table: MasterKind, row: NewMasterRow, signal: AbortSignal): Promise<StockResult<Genre | Location | Unit>>;
   updateMaster(table: MasterKind, id: string, patch: MasterPatch, signal: AbortSignal): Promise<StockResult<Genre | Location | Unit>>;
   deleteMaster(table: MasterKind, id: string, signal: AbortSignal): Promise<StockResult<null>>;
@@ -81,8 +86,17 @@ export type SubscribeFn = (
   onStatus: (status: ChannelStatus) => void,
 ) => () => void;
 
+/** 買い物リストの store(ShoppingStore)とのつなぎ。StockStore は直接知らない(30 Interfaces §9。単体テストで差し替える) */
+export type ShoppingHooks = {
+  /** 品物の削除の控え: その品物の自動の行と同じ名前の手入力の行(生きているもの) */
+  linkedEntries(itemId: string, itemName: string): ShoppingListEntry[];
+  /** 「元に戻す」: 削除の印を外し、自動の行は item_id を戻す。失敗は false */
+  restoreEntries(rows: ShoppingListEntry[]): Promise<boolean>;
+};
+
 export type StoreDeps = {
   api?: StockApi;
+  shoppingHooks?: ShoppingHooks;
   subscribe?: SubscribeFn;
   now?: () => Date;
   newId?: () => string;
@@ -101,6 +115,8 @@ type Op = {
   stockIds?: string[];
   /** 送信が成功したあとに画面とサーバーの控えを整える */
   onOk?: () => void;
+  /** 在庫の書き込みが not_found で、品物ごと消えていたか(R3-16。失敗のあとに1回だけ聞いて入れる) */
+  itemGone?: boolean;
   /** insert: 行の全体 / patch: 変える列だけ */
   payload?: Record<string, unknown>;
   /** 登録の途中の操作。失敗は FailureNotice にせず、register の戻り値で返す */
@@ -122,7 +138,7 @@ function mutableOf(table: StockTable, row: AnyStockRow): Record<string, unknown>
   const pick = (keys: string[]) => Object.fromEntries(keys.map((k) => [k, (row as unknown as Record<string, unknown>)[k]]));
   switch (table) {
     case "item":
-      return pick(["name", "genreId", "unitId", "locationId", "stockLevel", "lastExpiryDays", "isRegular", "tracking", "restockAtCount", "restockAtLevel", "supplyGenre", "note"]);
+      return pick(["name", "genreId", "unitId", "locationId", "stockLevel", "lastExpiryDays", "isRegular", "tracking", "restockAtCount", "restockAtLevel", "supplyGenre", "note", "purchasedOn"]);
     case "item_stock":
       return pick(["quantity", "locationId", "expiresOn", "purchasedOn"]);
     case "genre":
@@ -136,21 +152,15 @@ function mutableOf(table: StockTable, row: AnyStockRow): Record<string, unknown>
 const sameMutable = (table: StockTable, a: AnyStockRow, b: AnyStockRow) => JSON.stringify(mutableOf(table, a)) === JSON.stringify(mutableOf(table, b));
 
 /** 6秒の間の、この端末の操作で変えた品物・在庫の行の、変える前の値(OD-stock-uiux-50 (7)、30 M-05)。null は、その前には無かった行 */
-type Scope = { rows: Map<string, { table: "item" | "item_stock"; id: string; before: AnyStockRow | null }>; active: boolean; timer: ReturnType<typeof setTimeout> | null };
-
-
-/** "2026-11-09T05:52:49.111983+00:00" のようなサーバーの時刻をマイクロ秒まで比べる(Date はミリ秒までしか持たない) */
-function timeKey(ts: string): string {
-  const m = /^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2}:\d{2})(?:\.(\d+))?(Z|[+-]\d{2}(?::?\d{2})?)?$/.exec(ts);
-  if (m && (m[4] === undefined || m[4] === "Z" || /^[+-]00(:?00)?$/.test(m[4]))) return `${m[1]}T${m[2]}.${(m[3] ?? "").padEnd(6, "0").slice(0, 6)}`;
-  const ms = Date.parse(ts);
-  return Number.isNaN(ms) ? ts : `${new Date(ms).toISOString().slice(0, 19)}.${String(ms % 1000).padStart(3, "0")}000`;
-}
-const cmpTs = (a: string, b: string): number => {
-  const x = timeKey(a);
-  const y = timeKey(b);
-  return x < y ? -1 : x > y ? 1 : 0;
+type Scope = {
+  rows: Map<string, { table: "item" | "item_stock"; id: string; before: AnyStockRow | null }>;
+  active: boolean;
+  timer: ReturnType<typeof setTimeout> | null;
+  /** 品物の削除で一緒に消えた買い物リストの行(R3-11。「元に戻す」で印を外す) */
+  linked: ShoppingListEntry[];
+  linkedItemName: string;
 };
+
 
 export class StockStore {
   private readonly api: StockApi;
@@ -159,6 +169,7 @@ export class StockStore {
   private readonly newId: () => string;
   private readonly timeoutMs: number;
   private readonly isOnline: () => boolean;
+  private shoppingHooks: ShoppingHooks | null;
 
   private readonly view = this.emptyMaps();
   private readonly server = this.emptyMaps();
@@ -191,6 +202,7 @@ export class StockStore {
     this.newId = deps.newId ?? (() => crypto.randomUUID());
     this.timeoutMs = deps.timeoutMs ?? STOCK_REQUEST_TIMEOUT_MS;
     this.isOnline = deps.isOnline ?? (() => (typeof navigator === "undefined" ? true : navigator.onLine));
+    this.shoppingHooks = deps.shoppingHooks ?? null;
     this.connection = this.isOnline() ? "online" : "offline";
     this.today = todayInJst(this.now());
     this.snapshot = this.build();
@@ -245,6 +257,11 @@ export class StockStore {
   }
   private touch(key: string): void {
     this.touched.set(key, ++this.seq);
+  }
+
+  /** 買い物リストの store とのつなぎ(Provider が、両方を作ったあとにつなぐ) */
+  setShoppingHooks(hooks: ShoppingHooks | null): void {
+    this.shoppingHooks = hooks;
   }
 
   // ---- 開始と終了 ----
@@ -589,6 +606,14 @@ export class StockStore {
   setRegular(itemId: string, value: boolean): void {
     this.patchItem(itemId, { isRegular: value });
   }
+  /** 補充の目安(R3-9)。品物の update 1回(保存を待たない)。オフラインでは何もしない(patchItem の規則) */
+  setRestock(itemId: string, ui: RestockUi): void {
+    const item = this.view.item.get(itemId) as Item | undefined;
+    if (!item) return;
+    const patch = fromRestockUi(item.tracking, ui);
+    if (patch.restockAtCount === item.restockAtCount && patch.restockAtLevel === item.restockAtLevel) return;
+    this.patchItem(itemId, patch);
+  }
 
   // ---- マスタ(オンライン時のみ。ADR 0004 §1) ----
   private mastersOf(kind: MasterKind): Array<Genre | Location | Unit> {
@@ -688,7 +713,7 @@ export class StockStore {
   // ---- 品物の削除・管理のしかた(「元に戻す」は6秒の間のこの端末の操作ごと戻す。規則 12〜14) ----
   private openScope(): Scope {
     this.closeScope();
-    const scope: Scope = { rows: new Map(), active: true, timer: null };
+    const scope: Scope = { rows: new Map(), active: true, timer: null, linked: [], linkedItemName: "" };
     scope.timer = setTimeout(() => {
       scope.active = false;
     }, UNDO_WINDOW_MS);
@@ -713,6 +738,8 @@ export class StockStore {
     const item = this.view.item.get(itemId) as Item | undefined;
     if (!item) return null;
     const scope = this.openScope();
+    scope.linked = this.shoppingHooks?.linkedEntries(itemId, item.name) ?? [];
+    scope.linkedItemName = item.name;
     this.remember("item", itemId);
     const stocks = [...this.view.item_stock.values()].filter((s) => (s as ItemStock).itemId === itemId);
     for (const st of stocks) {
@@ -818,6 +845,16 @@ export class StockStore {
       }
     }
     const stocksDone = Promise.all(stockSteps).then(() => true);
+    if (scope.linked.length > 0 && this.shoppingHooks) {
+      // 品物の作り直し → 在庫 → 買い物リストの行(ADR 0010 の延長)。控えは「この削除で消えた行」だけ
+      const hooks = this.shoppingHooks;
+      const linked = scope.linked;
+      const name = scope.linkedItemName;
+      void Promise.all([itemsOk, stocksDone]).then(async ([itemsGood]) => {
+        const ok = itemsGood ? await hooks.restoreEntries(linked) : false;
+        if (!ok) this.notify({ kind: "undo_failed", itemName: name });
+      });
+    }
     for (const e of entries.filter((x) => x.table === "item" && !x.before)) {
       if (!this.view.item.has(e.id)) continue;
       for (const [sid, st] of [...this.view.item_stock]) {
@@ -970,6 +1007,9 @@ export class StockStore {
         op.waiters.forEach((w) => w({ ok: true }));
         continue;
       }
+      if (result.reason === "not_found" && entry.table === "item_stock" && !op.undo) {
+        op.itemGone = await this.checkItemGone(entry.id);
+      }
       const dropped = entry.queued as Op | null;
       entry.queued = null;
       this.revert(entry, op, result.reason);
@@ -1027,6 +1067,18 @@ export class StockStore {
     return { ok: true };
   }
 
+  /** R3-16: 在庫の行の品物が、サーバーにまだあるか(1回だけ聞く。聞けなかったときは「ある」= 今までどおり gone) */
+  private async checkItemGone(stockId: string): Promise<boolean> {
+    const st = (this.server.item_stock.get(stockId) ?? this.view.item_stock.get(stockId)) as ItemStock | undefined;
+    if (!st) return false;
+    try {
+      const r = await withTimeout((signal) => this.api.itemExists(st.itemId, signal), this.timeoutMs);
+      return r.ok && !r.value;
+    } catch {
+      return false;
+    }
+  }
+
   /** 失敗の戻し(規則 3): 最後にサーバーから受け取った値に戻し、知らせる */
   private revert(entry: Entry, op: Op, reason: StockFailure | "dependency"): void {
     const { table, id } = entry;
@@ -1043,6 +1095,20 @@ export class StockStore {
       return;
     }
     if (reason === "not_found") {
+      if (table === "item_stock" && op.itemGone) {
+        // 品物ごと消えていた(相手の削除。R3-16)
+        const gone = ((this.server.item_stock.get(id) ?? this.view.item_stock.get(id)) as ItemStock | undefined)?.itemId;
+        if (gone) {
+          for (const m of [this.server, this.view]) {
+            for (const [sid, st] of [...m.item_stock]) if ((st as ItemStock).itemId === gone) m.item_stock.delete(sid);
+            m.item.delete(gone);
+          }
+          this.touch(`item:${gone}`);
+        }
+        this.touch(`item_stock:${id}`);
+        if (!op.silent) this.notify({ kind: "item_gone", itemName: name });
+        return;
+      }
       if (table === "item_stock") {
         this.server.item_stock.delete(id);
         this.view.item_stock.delete(id);

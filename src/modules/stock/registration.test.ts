@@ -17,6 +17,8 @@ const input = (over: Partial<RegistrationInput> = {}): RegistrationInput => ({
   locationId: "loc-fridge",
   purchasedOn: "2026-10-20",
   expiresOn: "2026-10-30",
+  restockAtCount: null,
+  restockAtLevel: null,
   ...over,
 });
 
@@ -48,9 +50,9 @@ describe("planRegistration: 新しい品物", () => {
     expect("newItem" in plan && plan.newItem?.lastExpiryDays).toBeNull();
   });
   it("残量で管理は在庫を作らず、残量の目安は △ で", () => {
-    const plan = planRegistration(input({ name: "しょうゆ", tracking: "level", unitId: null, quantity: null, stockLevel: "low", expiresOn: "2026-10-30" }), data(), ids);
+    const plan = planRegistration(input({ name: "しょうゆ", tracking: "level", unitId: null, quantity: null, stockLevel: "low", expiresOn: "2026-10-30", restockAtLevel: "low" }), data(), ids);
     expect(plan).toEqual({
-      newItem: expect.objectContaining({ tracking: "level", stockLevel: "low", restockAtLevel: "low", unitId: null, lastExpiryDays: null }),
+      newItem: expect.objectContaining({ tracking: "level", stockLevel: "low", restockAtLevel: "low", unitId: null, lastExpiryDays: null, purchasedOn: "2026-10-20" }),
     });
   });
 });
@@ -86,7 +88,7 @@ describe("planRegistration: 既存の品物(OD-stock-food-06)", () => {
   it("残量で管理の既存の品物: 残量と場所を書く", () => {
     const soy = item("soy", "しょうゆ", { tracking: "level", unitId: null, stockLevel: "full", genreId: "g-season", locationId: "loc-shelf" });
     const plan = planRegistration(input({ name: "しょうゆ", tracking: "level", genreId: "g-season", unitId: null, quantity: null, stockLevel: "out", locationId: "loc-shelf" }), data([soy]), ids);
-    expect(plan).toEqual({ itemPatch: { id: "soy", patch: { stockLevel: "out" } } });
+    expect(plan).toEqual({ itemPatch: { id: "soy", patch: { stockLevel: "out", purchasedOn: "2026-10-20" } } });
   });
 });
 
@@ -126,7 +128,7 @@ describe("日用品の登録(stock-supply)", () => {
     expect(plan.newStock).toMatchObject({ locationId: null, expiresOn: null, quantity: 2 });
   });
   it("新しい残量の日用品は在庫を作らず、目安は low", () => {
-    const plan = planRegistration(sup({ name: "洗剤", tracking: "level", unitId: null, quantity: null, stockLevel: "low" }), data([]), ids);
+    const plan = planRegistration(sup({ name: "洗剤", tracking: "level", unitId: null, quantity: null, stockLevel: "low", restockAtLevel: "low" }), data([]), ids);
     if ("error" in plan) throw new Error("unexpected");
     expect(plan.newItem).toMatchObject({ stockLevel: "low", restockAtLevel: "low", unitId: null });
     expect(plan.newStock).toBeUndefined();
@@ -158,7 +160,7 @@ describe("日用品の登録(stock-supply)", () => {
     const shampoo = item("shampoo", "シャンプー", { itemKind: "supply", tracking: "level", stockLevel: "full", genreId: null, locationId: null, unitId: null });
     const plan = planRegistration(sup({ name: "シャンプー", tracking: "level", unitId: null, quantity: null, stockLevel: "low" }), data([shampoo]), ids);
     if ("error" in plan) throw new Error("unexpected");
-    expect(plan.itemPatch?.patch).toEqual({ stockLevel: "low" });
+    expect(plan.itemPatch?.patch).toEqual({ stockLevel: "low", purchasedOn: "2026-10-20" });
     expect(plan.stockPatch).toBeUndefined();
   });
   it("候補の初期値に種別・ジャンル・備考が入り、場所・期限は無い", () => {
@@ -166,3 +168,28 @@ describe("日用品の登録(stock-supply)", () => {
     expect(p).toMatchObject({ kind: "supply", supplyGenre: "キッチン", note: "30cm", locationId: null, expiresOn: null });
   });
 });
+
+describe("補充の目安と購入日(3b、R3-9・B1)", () => {
+  it("新しい数の品物は、入力の目安の値で作る(既定値の決め打ちをしない)", () => {
+    const plan = planRegistration(input({ name: "ヨーグルト", restockAtCount: 1 }), data(), ids);
+    expect(plan).toMatchObject({ newItem: { restockAtCount: 1, restockAtLevel: null, purchasedOn: null } });
+  });
+  it("既存の数の品物: 目安が違えば品物の更新に入れる", () => {
+    const plan = planRegistration(input({ restockAtCount: 0 }), data([milk]), ids);
+    expect(plan).toMatchObject({ itemPatch: { id: "milk", patch: { restockAtCount: 0 } } });
+  });
+  it("既存の数の品物: 目安が同じなら入れない", () => {
+    const plan = planRegistration(input(), data([milk]), ids);
+    expect(plan).not.toHaveProperty("itemPatch.patch.restockAtCount");
+  });
+  it("既存の残量の品物: 目安が違えば入れる", () => {
+    const soy = item("soy", "しょうゆ", { tracking: "level", unitId: null, stockLevel: "full", genreId: "g-season", locationId: "loc-shelf", restockAtLevel: "low" });
+    const plan = planRegistration(input({ name: "しょうゆ", tracking: "level", genreId: "g-season", unitId: null, quantity: null, stockLevel: "full", locationId: "loc-shelf", restockAtLevel: "out" }), data([soy]), ids);
+    expect(plan).toMatchObject({ itemPatch: { id: "soy", patch: { restockAtLevel: "out", purchasedOn: "2026-10-20" } } });
+  });
+  it("候補の初期値に前回の目安が入る", () => {
+    const m = item("m2", "牛乳2", { restockAtCount: 2 });
+    expect(prefillFromItem(m, data([m]), "2026-10-23")).toMatchObject({ restockAtCount: 2, restockAtLevel: null });
+  });
+});
+

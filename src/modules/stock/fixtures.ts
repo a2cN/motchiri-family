@@ -39,6 +39,7 @@ export function item(id: string, name: string, over: Partial<Item> = {}, n = 0):
     lastExpiryDays: null,
     supplyGenre: null,
     note: null,
+    purchasedOn: null,
     ...over,
   };
 }

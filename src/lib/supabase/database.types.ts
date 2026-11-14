@@ -47,14 +47,14 @@ isOneToOne: false
                   ]
                 },"item": {
                   Row: {
-                    "created_at": string,"genre_id": string | null,"household_id": string,"id": string,"is_regular": boolean,"item_kind": string,"last_expiry_days": number | null,"location_id": string | null,"name": string,"note": string | null,"restock_at_count": number | null,"restock_at_level": string | null,"stock_level": string | null,"supply_genre": string | null,"tracking": string,"unit_id": string | null,"updated_at": string
+                    "created_at": string,"genre_id": string | null,"household_id": string,"id": string,"is_regular": boolean,"item_kind": string,"last_expiry_days": number | null,"location_id": string | null,"name": string,"note": string | null,"purchased_on": string | null,"restock_at_count": number | null,"restock_at_level": string | null,"stock_level": string | null,"supply_genre": string | null,"tracking": string,"unit_id": string | null,"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "created_at"?: string,"genre_id"?: string | null,"household_id": string,"id"?: string,"is_regular"?: boolean,"item_kind": string,"last_expiry_days"?: number | null,"location_id"?: string | null,"name": string,"note"?: string | null,"restock_at_count"?: number | null,"restock_at_level"?: string | null,"stock_level"?: string | null,"supply_genre"?: string | null,"tracking": string,"unit_id"?: string | null,"updated_at"?: string
+                    "created_at"?: string,"genre_id"?: string | null,"household_id": string,"id"?: string,"is_regular"?: boolean,"item_kind": string,"last_expiry_days"?: number | null,"location_id"?: string | null,"name": string,"note"?: string | null,"purchased_on"?: string | null,"restock_at_count"?: number | null,"restock_at_level"?: string | null,"stock_level"?: string | null,"supply_genre"?: string | null,"tracking": string,"unit_id"?: string | null,"updated_at"?: string
                   }
                   Update: {
-                    "created_at"?: string,"genre_id"?: string | null,"household_id"?: string,"id"?: string,"is_regular"?: boolean,"item_kind"?: string,"last_expiry_days"?: number | null,"location_id"?: string | null,"name"?: string,"note"?: string | null,"restock_at_count"?: number | null,"restock_at_level"?: string | null,"stock_level"?: string | null,"supply_genre"?: string | null,"tracking"?: string,"unit_id"?: string | null,"updated_at"?: string
+                    "created_at"?: string,"genre_id"?: string | null,"household_id"?: string,"id"?: string,"is_regular"?: boolean,"item_kind"?: string,"last_expiry_days"?: number | null,"location_id"?: string | null,"name"?: string,"note"?: string | null,"purchased_on"?: string | null,"restock_at_count"?: number | null,"restock_at_level"?: string | null,"stock_level"?: string | null,"supply_genre"?: string | null,"tracking"?: string,"unit_id"?: string | null,"updated_at"?: string
                   }
                   Relationships: [
                     {
@@ -151,6 +151,52 @@ isOneToOne: false
       foreignKeyName: "member_household_id_fkey"
       columns: ["household_id"]
 isOneToOne: false
+      referencedRelation: "household"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"shopping_list": {
+                  Row: {
+                    "created_at": string,"deleted_at": string | null,"household_id": string,"id": string,"is_checked": boolean,"is_dismissed": boolean,"item_id": string | null,"name": string,"prev_stock_level": string | null,"source": string,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"deleted_at"?: string | null,"household_id": string,"id"?: string,"is_checked"?: boolean,"is_dismissed"?: boolean,"item_id"?: string | null,"name": string,"prev_stock_level"?: string | null,"source": string,"updated_at"?: string
+                  }
+                  Update: {
+                    "created_at"?: string,"deleted_at"?: string | null,"household_id"?: string,"id"?: string,"is_checked"?: boolean,"is_dismissed"?: boolean,"item_id"?: string | null,"name"?: string,"prev_stock_level"?: string | null,"source"?: string,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "shopping_list_household_id_fkey"
+      columns: ["household_id"]
+isOneToOne: false
+      referencedRelation: "household"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "shopping_list_household_id_item_id_fkey"
+      columns: ["household_id","item_id"]
+isOneToOne: false
+      referencedRelation: "item"
+      referencedColumns: ["household_id","id"]
+    }
+                  ]
+                },"shopping_memo": {
+                  Row: {
+                    "body": string,"created_at": string,"household_id": string,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "body"?: string,"created_at"?: string,"household_id": string,"updated_at"?: string
+                  }
+                  Update: {
+                    "body"?: string,"created_at"?: string,"household_id"?: string,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "shopping_memo_household_id_fkey"
+      columns: ["household_id"]
+isOneToOne: true
       referencedRelation: "household"
       referencedColumns: ["id"]
     }

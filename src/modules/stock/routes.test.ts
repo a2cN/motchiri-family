@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  backHrefForEdit, itemEditHref, itemNewHref, itemsHref, kindOfOrigin, mastersHref, parseItemEditQuery, parseItemsQuery, parseOriginQuery, stockHref,
+  backHrefForEdit, checkInHref, itemEditHref, itemNewHref, itemsHref, kindOfOrigin, mastersHref, parseItemEditQuery, parseItemsQuery, parseOriginQuery, shoppingListHref, shoppingMemoHref, stockHref,
 } from "./routes";
 
 const p = (s: string) => new URLSearchParams(s);
@@ -22,6 +22,9 @@ describe("routes", () => {
     expect(itemEditHref({ id: "x", from: "items", items: { from: "stock", kind: "supply" } })).toBe(
       "/stock/item-edit/?id=x&from=items&kind=supply&itemsFrom=stock",
     );
+  });
+  it("買い物リスト・メモ・在庫登録(3b)の URL は末尾スラッシュ", () => {
+    expect([shoppingListHref(), shoppingMemoHref(), checkInHref()]).toEqual(["/stock/shopping-list/", "/stock/shopping-memo/", "/stock/check-in/"]);
   });
   it("読み取り: 既定と知らない値", () => {
     expect(parseItemsQuery(p(""))).toEqual({ from: "stock", kind: "food" });

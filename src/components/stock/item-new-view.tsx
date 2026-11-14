@@ -12,6 +12,7 @@ import { formatQuantity, parseQuantity, stepQuantity } from "@/modules/stock/qua
 import {
   defaultLocationForGenre, prefillFromItem, validateRegistration, type RegistrationInput,
 } from "@/modules/stock/registration";
+import { fromRestockUi, toRestockUi } from "@/modules/stock/restock";
 import { kindOfOrigin, parseOriginQuery, stockHref } from "@/modules/stock/routes";
 import { normalizeFreeText, supplyGenres } from "@/modules/stock/supply";
 import type { Item, ItemKind, StockLevel, Tracking } from "@/modules/stock/types";
@@ -21,9 +22,10 @@ import {
 import { Card } from "./card";
 import { Frame } from "./frame";
 import { useLookup } from "./lookup";
+import { RestockField, defaultRestockForm, restockUiFromForm, toRestockForm, type RestockForm } from "./restock-field";
 import { useAfterDelay, useStock, useStockContext } from "./stock-provider";
 
-// 品物の登録(docs/design/stock/ + docs/design/stock-supply/: 種別「食材 / 日用品」は出す。補充の目安は出さない)。
+// 品物の登録(docs/design/stock/ + docs/design/stock-supply/ + docs/design/stock-shopping/: 種別「食材 / 日用品」、補充の目安の欄)。
 
 type Form = {
   kind: ItemKind;
@@ -40,8 +42,9 @@ type Form = {
   locationId: string;
   purchased: string;
   expires: string;
+  restock: RestockForm;
 };
-type Errors = { name?: string; genre?: string; unit?: string; qty?: string; tracking?: string };
+type Errors = { name?: string; restock?: string; genre?: string; unit?: string; qty?: string; tracking?: string };
 
 const TRACKING_LABEL: Record<Tracking, string> = { count: "数で管理", level: "残量で管理" };
 const KIND_LABEL: Record<ItemKind, string> = { food: "食材", supply: "日用品" };
@@ -50,6 +53,7 @@ const defaultTracking = (kind: ItemKind): Tracking => (kind === "food" ? "count"
 const emptyForm = (today: string, kind: ItemKind = "food"): Form => ({
   kind, supplyGenre: "", note: "",
   name: "", picked: null, tracking: defaultTracking(kind), qty: "1", unitId: "", level: "full", genreId: "", locationId: "", purchased: today, expires: "",
+  restock: defaultRestockForm(defaultTracking(kind)),
 });
 
 function formFromInput(input: RegistrationInput): Form {
@@ -67,6 +71,7 @@ function formFromInput(input: RegistrationInput): Form {
     locationId: input.locationId ?? "",
     purchased: input.purchasedOn,
     expires: input.expiresOn ?? "",
+    restock: toRestockForm(toRestockUi({ tracking: input.tracking, restockAtCount: input.restockAtCount, restockAtLevel: input.restockAtLevel })),
   };
 }
 
@@ -121,6 +126,7 @@ export function ItemNewView() {
       level: p.stockLevel,
       purchased: form.purchased,
       expires: p.expiresOn ?? "",
+      restock: toRestockForm(toRestockUi({ tracking: p.tracking, restockAtCount: p.restockAtCount, restockAtLevel: p.restockAtLevel })),
     });
     setQuery(item.name);
     setErrors({});
@@ -143,6 +149,7 @@ export function ItemNewView() {
       locationId: supply ? null : form.locationId || null,
       purchasedOn: form.purchased,
       expiresOn: !supply && form.tracking === "count" ? form.expires || null : null,
+      ...fromRestockUi(form.tracking, restockUiFromForm(form.restock) ?? { kind: "none" }),
     };
   };
 
@@ -167,6 +174,7 @@ export function ItemNewView() {
         return e;
       }
     }
+    if (form.tracking === "count" && form.restock.mode === "count" && restockUiFromForm(form.restock) === null) e.restock = form.restock.error ?? QUANTITY_ERROR.not_positive;
     if (form.kind === "food" && form.genreId === "") e.genre = "ジャンルを選んでください";
     if (form.tracking === "count") {
       const q = parseQuantity(form.qty, "positive");
@@ -185,7 +193,9 @@ export function ItemNewView() {
           ? "#item-new-genre"
           : e.qty
             ? "#item-new-qty"
-            : "[data-unit-group] button";
+            : e.restock && !e.unit
+              ? "#item-new-restock-n"
+              : "[data-unit-group] button";
     document.querySelector<HTMLElement>(target)?.focus();
   };
 
@@ -197,6 +207,7 @@ export function ItemNewView() {
     }
     const next = validate();
     setErrors(next);
+    if (next.restock) set({ restock: { ...form.restock, error: next.restock } });
     if (Object.keys(next).length > 0) {
       focusFirstError(next);
       return;
@@ -268,7 +279,7 @@ export function ItemNewView() {
               if ((v[0] === "food" || v[0] === "supply") && v[0] !== form.kind) {
                 // 種別を変えると、管理のしかたは種別の既定に戻り、ジャンル・場所・期限が空に戻る(OD-stock-uiux-50 (5))
                 set({
-                  kind: v[0], tracking: defaultTracking(v[0]), genreId: "", locationId: "", expires: "", supplyGenre: "", note: "", picked: null,
+                  kind: v[0], tracking: defaultTracking(v[0]), restock: defaultRestockForm(defaultTracking(v[0])), genreId: "", locationId: "", expires: "", supplyGenre: "", note: "", picked: null,
                 });
                 setErrors({});
               }
@@ -339,8 +350,8 @@ export function ItemNewView() {
                 value={[form.tracking]}
                 onValueChange={(v) => {
                   if ((v[0] === "count" || v[0] === "level") && v[0] !== form.tracking) {
-                    set({ tracking: v[0] });
-                    setErrors((x) => ({ ...x, tracking: undefined, unit: undefined }));
+                    set({ tracking: v[0], restock: defaultRestockForm(v[0]) });
+                    setErrors((x) => ({ ...x, tracking: undefined, unit: undefined, restock: undefined }));
                   }
                 }}
               >
@@ -463,6 +474,7 @@ export function ItemNewView() {
               </div>
             </Field>
           )}
+          <RestockField idPrefix="item-new-restock" tracking={form.tracking} unit={unitName} value={form.restock} onChange={(restock) => set({ restock })} />
           {form.kind === "supply" && (
             <Field label="備考" htmlFor="item-new-note">
               <Textarea id="item-new-note" value={form.note} onChange={(e) => set({ note: e.target.value })} />

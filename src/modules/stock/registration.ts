@@ -26,6 +26,9 @@ export type RegistrationInput = {
   purchasedOn: string;
   /** 数で管理のときだけ使う。null は期限なし */
   expiresOn: string | null;
+  /** 補充の目安(R3-9)。数で管理 = null(なし)/ 0(切れたら)/ n、残量で管理は restockAtLevel(low・out・null)。管理のしかたに合わない側は null */
+  restockAtCount: number | null;
+  restockAtLevel: "low" | "out" | null;
 };
 
 export type RegistrationPrefill = {
@@ -38,6 +41,9 @@ export type RegistrationPrefill = {
   locationId: string | null;
   expiresOn: string | null;
   stockLevel: StockLevel;
+  /** 候補を選んだとき、前回の補充の目安が入る(正典) */
+  restockAtCount: number | null;
+  restockAtLevel: "low" | "out" | null;
 };
 
 export type RegistrationError =
@@ -79,6 +85,8 @@ export function prefillFromItem(item: Item, data: StockData, purchasedOn: string
     locationId,
     expiresOn: item.tracking === "count" && item.lastExpiryDays !== null ? addDays(purchasedOn, item.lastExpiryDays) : null,
     stockLevel: item.stockLevel ?? "full",
+    restockAtCount: item.restockAtCount,
+    restockAtLevel: item.restockAtLevel,
   };
 }
 
@@ -148,12 +156,13 @@ export function planRegistration(
       unitId: isCount ? input.unitId : null,
       locationId: isSupply ? null : input.locationId,
       stockLevel: isCount ? null : input.stockLevel,
-      restockAtCount: null,
-      restockAtLevel: isCount ? null : "low",
+      restockAtCount: isCount ? input.restockAtCount : null,
+      restockAtLevel: isCount ? null : input.restockAtLevel,
       isRegular: false,
       lastExpiryDays: days,
       supplyGenre: isSupply ? input.supplyGenre : null,
       note: isSupply ? input.note : null,
+      purchasedOn: isCount ? null : input.purchasedOn,
     };
     return isCount ? { newItem, newStock: stockFor(ids.itemId, input, ids) } : { newItem };
   }
@@ -166,9 +175,12 @@ export function planRegistration(
     if (existing.unitId !== input.unitId) patch.unitId = input.unitId;
     if (existing.locationId !== input.locationId) patch.locationId = input.locationId;
     if (days !== null && existing.lastExpiryDays !== days) patch.lastExpiryDays = days;
+    if (existing.restockAtCount !== input.restockAtCount) patch.restockAtCount = input.restockAtCount;
   } else {
     if (existing.stockLevel !== input.stockLevel) patch.stockLevel = input.stockLevel;
     if (existing.locationId !== input.locationId) patch.locationId = input.locationId;
+    if (existing.restockAtLevel !== input.restockAtLevel) patch.restockAtLevel = input.restockAtLevel;
+    if (existing.purchasedOn !== input.purchasedOn) patch.purchasedOn = input.purchasedOn;
   }
   const plan: RegistrationPlan = {};
   if (Object.keys(patch).length > 0) plan.itemPatch = { id: existing.id, patch };
@@ -184,8 +196,11 @@ function planExistingSupply(existing: Item, input: RegistrationInput, data: Stoc
   const plan: RegistrationPlan = {};
   if (input.tracking === "level") {
     if (existing.stockLevel !== input.stockLevel) patch.stockLevel = input.stockLevel;
+    if (existing.restockAtLevel !== input.restockAtLevel) patch.restockAtLevel = input.restockAtLevel;
+    if (existing.purchasedOn !== input.purchasedOn) patch.purchasedOn = input.purchasedOn;
   } else {
     if (existing.unitId !== input.unitId) patch.unitId = input.unitId;
+    if (existing.restockAtCount !== input.restockAtCount) patch.restockAtCount = input.restockAtCount;
     const current = supplyStockOf(existing.id, data);
     if (current) {
       plan.stockPatch = {

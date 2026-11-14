@@ -6,7 +6,7 @@ const H = "h";
 const item = (id: string, o: Partial<Item>): Item => ({
   id, householdId: H, createdAt: `2026-11-0${id.length}T00:00:00Z`, updatedAt: "", name: id, itemKind: "supply", tracking: "level",
   genreId: null, unitId: null, locationId: null, stockLevel: "full", restockAtCount: null, restockAtLevel: "low", isRegular: false,
-  lastExpiryDays: null, supplyGenre: null, note: null, ...o,
+  lastExpiryDays: null, supplyGenre: null, note: null, purchasedOn: null, ...o,
 });
 const stock = (id: string, itemId: string, quantity: number, createdAt: string): ItemStock => ({
   id, householdId: H, createdAt, updatedAt: "", itemId, quantity, locationId: null, purchasedOn: "2026-11-01", expiresOn: null,

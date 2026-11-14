@@ -144,6 +144,7 @@ export function Frame({
   headerRight,
   bar,
   barAllSizes = false,
+  keepBarWhileTyping = false,
   widthClass = "max-w-[792px]",
   children,
 }: {
@@ -161,12 +162,15 @@ export function Frame({
   headerRight?: React.ReactNode;
   bar?: React.ReactNode;
   barAllSizes?: boolean;
+  /** 文字を打つ間、下のタブだけ隠して帯は残す(買い物リストの入力の帯。docs/design/stock-shopping/ 決定 4 A) */
+  keepBarWhileTyping?: boolean;
   widthClass?: string;
   children: React.ReactNode;
 }) {
   const typing = useTyping();
   const tabs = level === "top";
-  const showStack = (bar || tabs) && !typing;
+  const showStack = (bar || tabs) && (!typing || (keepBarWhileTyping && !!bar));
+  const showTabs = tabs && !typing;
   return (
     <div className="flex min-h-dvh flex-1 flex-col lg:pl-60">
       <Sidebar active={active} />
@@ -203,12 +207,12 @@ export function Frame({
           {bar && (
             <div
               className={cn("relative border-t border-border bg-card px-4 pt-3", !barAllSizes && "md:hidden")}
-              style={{ paddingBottom: tabs ? "0.75rem" : "calc(0.75rem + env(safe-area-inset-bottom))" }}
+              style={{ paddingBottom: showTabs ? "0.75rem" : "calc(0.75rem + env(safe-area-inset-bottom))" }}
             >
               <div className="mx-auto w-full max-w-[40rem]">{bar}</div>
             </div>
           )}
-          {tabs && <Tabs active={active} />}
+          {showTabs && <Tabs active={active} />}
         </BottomStack>
       )}
     </div>

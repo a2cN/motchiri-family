@@ -26,6 +26,9 @@ function query(entries: Array<[string, string | undefined]>): string {
 export function itemsHref(o: { from?: StockOrigin; kind?: ItemKind } = {}): string {
   return `/stock/items/${query([["from", o.from], ["kind", o.kind]])}`;
 }
+export const shoppingListHref = (): string => "/stock/shopping-list/";
+export const shoppingMemoHref = (): string => "/stock/shopping-memo/";
+export const checkInHref = (): string => "/stock/check-in/";
 export const mastersHref = (o: { from?: StockOrigin } = {}): string => `/stock/masters/${query([["from", o.from]])}`;
 export const itemNewHref = (o: { from?: StockOrigin } = {}): string => `/stock/item-new/${query([["from", o.from]])}`;
 export function itemEditHref(o: { id: string; from: EditOrigin; items?: { from: StockOrigin; kind: ItemKind } }): string {

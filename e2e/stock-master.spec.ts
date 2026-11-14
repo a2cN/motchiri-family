@@ -453,7 +453,7 @@ test("2人が同時に変えたとき: 品物の削除の直後に、相手の�
   await openStock(pageB, info, 2, SUITE);
   sql(`delete from public.item where household_id = '${h}' and name = '納豆'`);
   await pageB.getByRole("button", { name: "納豆を1増やす" }).click();
-  await expect(pageB.getByText("納豆の在庫は、もうありませんでした")).toBeVisible(wait);
+  await expect(pageB.getByText("納豆は、もう削除されていました")).toBeVisible(wait); // 3b の R3-16: 品物ごと消えていたと分かる(3a までは「在庫は、もうありませんでした」)
   await expect(row(pageB, "納豆")).toHaveCount(0);
   await contextB.close();
   void page;

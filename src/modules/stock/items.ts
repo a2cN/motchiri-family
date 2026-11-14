@@ -1,5 +1,6 @@
 // 品物の一覧・いつもの・管理のしかたの変更の純粋な関数(30_architecture.md Interfaces §5)。
 import { sortMasters, type NameCheck } from "./masters";
+import { fromRestockUi, restockDefaults, type RestockUi } from "./restock";
 import type { Item, ItemPatch, ItemStock, NewItemStock, StockData, StockLevel } from "./types";
 
 const byCreated = (a: { createdAt: string; id: string }, b: { createdAt: string; id: string }) =>
@@ -56,12 +57,16 @@ export function trackingDefaults(item: Item, data: StockData): TrackingDefaults 
   return { level, unitId: item.unitId, quantityText: item.stockLevel === "out" ? "0" : "1" };
 }
 
-export type TrackingChangeInput = { to: "level"; level: StockLevel } | { to: "count"; unitId: string; quantity: number };
+/** restock: パネルで選んだ補充の目安(R3-9)。省略は既定値(数: なし、残量: △で。OD-stock-uiux-18 A) */
+type RestockChoice = { restock?: RestockUi };
+export type TrackingChangeInput =
+  | ({ to: "level"; level: StockLevel } & RestockChoice)
+  | ({ to: "count"; unitId: string; quantity: number } & RestockChoice);
 export type TrackingPlan = { itemPatch: ItemPatch; removedStocks: ItemStock[]; newStock: NewItemStock | null };
 
 /**
  * 管理のしかたの変更の計画(OD-stock-uiux-43 A・50 (6)、ブリーフ A1)。
- * 数 → 残量: 場所 = 在庫のうち作った時刻が最も新しいものの場所(無ければ品物のまま)、補充の目安は既定値(数: なし、残量: △で)、単位は残す、在庫は全部消える(DB の trigger)。
+ * 数 → 残量: 場所 = 在庫のうち作った時刻が最も新しいものの場所(無ければ品物のまま)、補充の目安はパネルで選んだ値(省略は既定値 = 数: なし、残量: △で)、単位は残す、在庫は全部消える(DB の trigger)。
  * 残量 → 数: 在庫は個数が 0 より大きいときだけ作る。ただし日用品は 0 個でも作る(在庫は品物に1つ、0 でも残る。OD-stock-uiux-50 (6) A)。
  * 日用品の在庫は場所も期限も持たない(locationId = null)。
  */
@@ -79,8 +84,7 @@ export function planTrackingChange(
       itemPatch: {
         tracking: "level",
         stockLevel: input.level,
-        restockAtCount: null,
-        restockAtLevel: "low",
+        ...fromRestockUi("level", input.restock ?? restockDefaults("level")),
         locationId: newest ? newest.locationId : item.locationId,
       },
       removedStocks: stocks,
@@ -88,7 +92,10 @@ export function planTrackingChange(
     };
   }
   return {
-    itemPatch: { tracking: "count", stockLevel: null, unitId: input.unitId, restockAtLevel: null, restockAtCount: null },
+    itemPatch: {
+      tracking: "count", stockLevel: null, unitId: input.unitId,
+      ...fromRestockUi("count", input.restock ?? restockDefaults("count")),
+    },
     removedStocks: [],
     newStock:
       input.quantity > 0 || item.itemKind === "supply"

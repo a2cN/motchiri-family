@@ -1,7 +1,7 @@
 -- GRANT の見張り。新しいテーブルは、下の一覧に足すまで通らない。
 --  (1) anon は、public・private のどのテーブル・ビュー・シーケンスにも権限を1つも持たない
 --  (2) anon と全員(public)は、public・private の自分たちの関数(拡張機能のものを除く)を実行できない
---  (3) authenticated の権限は、一覧(household・member: SELECT、genre・location・unit・item・item_stock: 4つ)と完全に一致する
+--  (3) authenticated の権限は、一覧(household・member: SELECT、genre・location・unit・item・item_stock: 4つ、shopping_list: SELECT・INSERT・UPDATE、shopping_memo: SELECT・UPDATE)と完全に一致する
 -- 自己テスト: 仮のテーブルへの anon の GRANT は (1) が、一覧に無い truncate は (3) が見つける。
 begin;
 select plan(8);
@@ -61,6 +61,8 @@ select results_eq(
     ('item_stock:DELETE'), ('item_stock:INSERT'), ('item_stock:SELECT'), ('item_stock:UPDATE'),
     ('location:DELETE'), ('location:INSERT'), ('location:SELECT'), ('location:UPDATE'),
     ('member:SELECT'),
+    ('shopping_list:INSERT'), ('shopping_list:SELECT'), ('shopping_list:UPDATE'),
+    ('shopping_memo:SELECT'), ('shopping_memo:UPDATE'),
     ('unit:DELETE'), ('unit:INSERT'), ('unit:SELECT'), ('unit:UPDATE') $$,
   '(3) authenticated の権限が、一覧(household・member: SELECT、genre・location・unit・item・item_stock: SELECT・INSERT・UPDATE・DELETE)と完全に一致する'
 );

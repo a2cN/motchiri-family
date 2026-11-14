@@ -7,6 +7,7 @@ import { StockStore, type FailureNotice, type StockSnapshot } from "@/modules/st
 import type { RegistrationInput } from "@/modules/stock/registration";
 import { itemNewHref } from "@/modules/stock/routes";
 import { StockToaster } from "./frame";
+import { ShoppingProvider } from "./shopping-provider";
 import { notify } from "./bits";
 
 // 倉庫の store の Provider(30_architecture.md D-19)。倉庫の画面の間を移っても同じ store。
@@ -76,7 +77,7 @@ function Inner({ householdId, children }: { householdId: string; children: React
   const value = useMemo(() => ({ store, refill, requestRefill, consumeRefill }), [store, refill, requestRefill, consumeRefill]);
   return (
     <StockContext.Provider value={value}>
-      {children}
+      <ShoppingProvider stockStore={store}>{children}</ShoppingProvider>
       <StockToaster />
     </StockContext.Provider>
   );

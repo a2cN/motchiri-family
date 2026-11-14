@@ -48,6 +48,7 @@ export const toItem = (r: Row<"item">): Item => ({
   lastExpiryDays: r.last_expiry_days,
   supplyGenre: r.supply_genre,
   note: r.note,
+  purchasedOn: r.purchased_on,
 });
 export const toItemStock = (r: Row<"item_stock">): ItemStock => ({
   ...base(r),
@@ -136,6 +137,7 @@ const itemColumns = (p: ItemPatch): Partial<Tables["item"]["Update"]> => {
   if ("lastExpiryDays" in p) out.last_expiry_days = p.lastExpiryDays;
   if ("supplyGenre" in p) out.supply_genre = p.supplyGenre;
   if ("note" in p) out.note = p.note;
+  if ("purchasedOn" in p) out.purchased_on = p.purchasedOn;
   return out;
 };
 
@@ -160,6 +162,7 @@ export function insertItem(row: NewItem, signal: AbortSignal): Promise<StockResu
         last_expiry_days: row.lastExpiryDays,
         supply_genre: row.supplyGenre,
         note: row.note,
+        purchased_on: row.purchasedOn,
         ...(row.createdAt ? { created_at: row.createdAt } : {}),
       })
       .select()
@@ -238,6 +241,14 @@ export function deleteStock(id: string, signal: AbortSignal): Promise<StockResul
   });
 }
 
+
+/** 品物があるか(R3-16。在庫の書き込みが not_found のとき、品物ごと消えたかを分ける)。聞けなかったときは失敗 */
+export function itemExists(id: string, signal: AbortSignal): Promise<StockResult<boolean>> {
+  return guarded(async () => {
+    const { data, error } = await getSupabase().from("item").select("id").eq("id", id).abortSignal(signal).maybeSingle();
+    return error ? { ok: false, reason: classify(error) } : { ok: true, value: data !== null };
+  });
+}
 
 /** 0 行でも ok(もう無い)。在庫は外部キーの cascade で消える */
 export function deleteItem(id: string, signal: AbortSignal): Promise<StockResult<null>> {

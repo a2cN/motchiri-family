@@ -83,9 +83,9 @@ select "check", ok, detail from (
     (select count(*) from anon_rel_grants) = 0 and (select count(*) from anon_fn_exec) = 0,
     'テーブル等 ' || (select count(*) from anon_rel_grants)::text || ' 件 / 関数 ' || (select count(*) from anon_fn_exec)::text || ' 件'
   union all
-  select 5, 'authenticated の権限が一覧のとおり(倉庫のテーブル5つを含む)',
+  select 5, 'authenticated の権限が一覧のとおり(倉庫のテーブル5つ・買い物リストとメモを含む)',
     coalesce((select string_agg(relname || ':' || privs, ' / ' order by relname) from authed_privs), '')
-      = 'genre:DELETE,INSERT,SELECT,UPDATE / household:SELECT / item:DELETE,INSERT,SELECT,UPDATE / item_stock:DELETE,INSERT,SELECT,UPDATE / location:DELETE,INSERT,SELECT,UPDATE / member:SELECT / unit:DELETE,INSERT,SELECT,UPDATE',
+      = 'genre:DELETE,INSERT,SELECT,UPDATE / household:SELECT / item:DELETE,INSERT,SELECT,UPDATE / item_stock:DELETE,INSERT,SELECT,UPDATE / location:DELETE,INSERT,SELECT,UPDATE / member:SELECT / shopping_list:INSERT,SELECT,UPDATE / shopping_memo:SELECT,UPDATE / unit:DELETE,INSERT,SELECT,UPDATE',
     coalesce((select string_agg(relname || ':' || privs, ' / ' order by relname) from authed_privs), '(なし)')
   union all
   select 6, 'ポリシーの数(household 1・member 1)',
@@ -147,6 +147,42 @@ select "check", ok, detail from (
       and (select count(*) from pg_constraint where conrelid = 'public.item'::regclass and conname in ('item_supply_genre_format', 'item_note_format', 'item_supply_genre_only_supply', 'item_note_only_supply', 'item_supply_no_genre_master', 'item_supply_no_location')) = 6,
     (select count(*) from information_schema.columns where table_schema = 'public' and table_name = 'item' and column_name in ('supply_genre', 'note'))::text || ' 列 / '
       || (select count(*) from pg_constraint where conrelid = 'public.item'::regclass and conname in ('item_supply_genre_format', 'item_note_format', 'item_supply_genre_only_supply', 'item_note_only_supply', 'item_supply_no_genre_master', 'item_supply_no_location'))::text || ' check'
+  union all
+  select 21, '買い物リストと買い物メモがあり RLS が有効(2 / 2)。ポリシーの数(shopping_list 3・shopping_memo 2)',
+    (select count(*) from tbl where nspname = 'public' and relname in ('shopping_list', 'shopping_memo') and relrowsecurity) = 2
+      and (select count(*) from pg_policies where schemaname = 'public' and tablename = 'shopping_list') = 3
+      and (select count(*) from pg_policies where schemaname = 'public' and tablename = 'shopping_memo') = 2,
+    (select count(*) from tbl where nspname = 'public' and relname in ('shopping_list', 'shopping_memo') and relrowsecurity)::text || ' / 2、ポリシー shopping_list '
+      || (select count(*) from pg_policies where schemaname = 'public' and tablename = 'shopping_list')::text
+      || ' / shopping_memo ' || (select count(*) from pg_policies where schemaname = 'public' and tablename = 'shopping_memo')::text
+  union all
+  select 22, 'item.purchased_on がある。shopping_list の名前付きの制約2つと部分の一意の索引がある',
+    (select count(*) from information_schema.columns where table_schema = 'public' and table_name = 'item' and column_name = 'purchased_on') = 1
+      and (select count(*) from pg_constraint where conrelid = to_regclass('public.shopping_list') and conname in ('shopping_list_manual_unlinked', 'shopping_list_auto_linked')) = 2
+      and (select count(*) from pg_indexes where schemaname = 'public' and indexname = 'shopping_list_one_auto_per_item') = 1,
+    (select count(*) from information_schema.columns where table_schema = 'public' and table_name = 'item' and column_name = 'purchased_on')::text || ' 列 / '
+      || (select count(*) from pg_constraint where conrelid = to_regclass('public.shopping_list') and conname in ('shopping_list_manual_unlinked', 'shopping_list_auto_linked'))::text || ' 制約 / '
+      || (select count(*) from pg_indexes where schemaname = 'public' and indexname = 'shopping_list_one_auto_per_item')::text || ' 索引'
+  union all
+  select 23, '3b の trigger が11個そろう',
+    (select count(*) from pg_trigger as t where not t.tgisinternal and t.tgname in (
+      'item_shopping_sync', 'item_shopping_release', 'item_stock_shopping_sync', 'shopping_list_before_write', 'shopping_list_check_level',
+      'shopping_list_resync', 'shopping_list_broadcast', 'shopping_memo_broadcast', 'shopping_list_set_updated_at', 'shopping_memo_set_updated_at',
+      'household_seed_shopping_memo')) = 11,
+    (select count(*) from pg_trigger as t where not t.tgisinternal and t.tgname in (
+      'item_shopping_sync', 'item_shopping_release', 'item_stock_shopping_sync', 'shopping_list_before_write', 'shopping_list_check_level',
+      'shopping_list_resync', 'shopping_list_broadcast', 'shopping_memo_broadcast', 'shopping_list_set_updated_at', 'shopping_memo_set_updated_at',
+      'household_seed_shopping_memo'))::text || ' / 11'
+  union all
+  select 24, 'すべての世帯に買い物メモの行が1つ(世帯の数 = メモの数)',
+    (select count(*) from public.household) = (select count(*) from public.shopping_memo),
+    (select count(*) from public.household)::text || ' / ' || (select count(*) from public.shopping_memo)::text
+  union all
+  select 25, 'private の3bの関数が anon・全員から実行できない(shopping_list_sync_item だけ authenticated が実行できる)',
+    (select count(*) from fn where nspname = 'private' and proname in ('shopping_list_sync_item', 'item_shopping_sync', 'item_shopping_release', 'item_stock_shopping_sync', 'shopping_list_before_write', 'shopping_list_check_level', 'shopping_list_resync', 'seed_shopping_memo')) = 8
+      and (select count(*) from fn where proname in ('shopping_list_sync_item', 'item_shopping_sync', 'item_shopping_release', 'item_stock_shopping_sync', 'shopping_list_before_write', 'shopping_list_check_level', 'shopping_list_resync', 'seed_shopping_memo') and oid in (select oid from anon_fn_exec)) = 0,
+    (select count(*) from fn where nspname = 'private' and proname in ('shopping_list_sync_item', 'item_shopping_sync', 'item_shopping_release', 'item_stock_shopping_sync', 'shopping_list_before_write', 'shopping_list_check_level', 'shopping_list_resync', 'seed_shopping_memo'))::text || ' 関数 / anon 実行 '
+      || (select count(*) from fn where proname in ('shopping_list_sync_item', 'item_shopping_sync', 'item_shopping_release', 'item_stock_shopping_sync', 'shopping_list_before_write', 'shopping_list_check_level', 'shopping_list_resync', 'seed_shopping_memo') and oid in (select oid from anon_fn_exec))::text || ' 件'
   union all
   select 18, '世帯ごとの初期マスタの件数(ジャンル10・場所4・単位7)',
     (select count(*) from masters where genres < 10 or locations < 4 or units < 7) = 0,

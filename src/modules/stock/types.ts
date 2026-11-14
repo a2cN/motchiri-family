@@ -29,6 +29,8 @@ export type Item = Base & {
   supplyGenre: string | null;
   /** 日用品の備考。null = なし。食材は null */
   note: string | null;
+  /** 残量で管理の品物の購入日(B1)。どの画面にも出ない。数で管理の品物は null(在庫の購入日を使う) */
+  purchasedOn: string | null;
 };
 
 export type ItemStock = Base & {
@@ -48,7 +50,7 @@ export type ItemPatch = Partial<
   Pick<
     Item,
     | "name" | "genreId" | "unitId" | "locationId" | "stockLevel" | "lastExpiryDays" | "isRegular"
-    | "tracking" | "restockAtCount" | "restockAtLevel" | "supplyGenre" | "note"
+    | "tracking" | "restockAtCount" | "restockAtLevel" | "supplyGenre" | "note" | "purchasedOn"
   >
 >;
 /** マスタの値の変更。defaultLocationId はジャンルだけ、isCountable は単位だけ */
