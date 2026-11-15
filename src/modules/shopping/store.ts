@@ -125,7 +125,7 @@ export class ShoppingStore implements ShoppingHooks {
     return {
       load: this.load,
       connection: this.connection,
-      entries: listView(v.list),
+      entries: listView(v.list, new Set(v.list.filter((e) => !this.copy.has(e.id)).map((e) => e.id))),
       memo: v.memo,
       candidates: this.candidates,
       pendingCount: pendingCount(this.outbox),

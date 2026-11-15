@@ -17,8 +17,10 @@ class FakeShoppingServer implements ShoppingApi {
   failures: StockFailure[] = [];
   calls: string[] = [];
   fetchSince: Array<string | null> = [];
+  /** サーバーの時計の秒までの部分(端末の時計とずらして試すために変えられる) */
+  base = "2026-11-14T00:00:00";
   stamp() {
-    return `2026-11-14T00:00:00.${String(++this.clock).padStart(6, "0")}+00:00`;
+    return `${this.base}.${String(++this.clock).padStart(6, "0")}+00:00`;
   }
   private fail<T>(): StockResult<T> | null {
     const reason = this.failures.shift();
@@ -213,6 +215,18 @@ describe("書き込みの入口 enqueue(決まり 1〜4)", () => {
     await flush();
     expect(h.server.rows.get("卵")?.isChecked).toBe(true);
     expect(h.store.getSnapshot().pendingCount).toBe(0);
+  });
+  it("追加した行は、同期でサーバーの写しが届いても動かない(端末の時計がサーバーより遅れていても。チェックしても動かない規則)", async () => {
+    // 端末の時計は 03:00。サーバーの時計は 06:00 台で、既存の行(卵)は 05:00
+    const h = await setup({ rows: [["卵", { createdAt: "2026-11-14T05:00:00.000000+00:00" }]] });
+    h.server.base = "2026-11-14T06:00:00";
+    expect(h.store.addManual("豆乳")).toEqual({ ok: true });
+    const before = h.names();
+    expect(before).toEqual(["卵", "豆乳"]); // 端末の createdAt(03:00)は卵(05:00)より前だが、端末だけの行は最後に置く
+    await flush();
+    await h.store.syncNow();
+    expect((h.server.rows.get("new-1")?.createdAt ?? "") > "2026-11-14T05:00").toBe(true);
+    expect(h.names()).toEqual(before);
   });
   it("オフライン: 画面は変わり、未同期が数えられ、送らない。電波が戻ると送る", async () => {
     const h = await setup({ rows: [["卵", {}]] });
